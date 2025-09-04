@@ -21,7 +21,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
 
     const request = await prisma.nameChangeRequest.findUnique({
         where: {
-            id: parseInt(requestId)
+            id: parseInt(requestId!)
         }
     })
 
@@ -52,7 +52,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
             request.approvedBy = interaction.user.id;
             await prisma.nameChangeRequest.update({
                 where: {
-                    id: parseInt(requestId)
+                    id: parseInt(requestId!)
                 },
                 data: {
                     approved: request.approved,
@@ -98,7 +98,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
 
         await prisma.nameChangeRequest.update({
             where: {
-                id: parseInt(requestId),
+                id: parseInt(requestId!),
             },
             data: {
                 approved: request.approved,

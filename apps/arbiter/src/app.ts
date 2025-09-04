@@ -11,7 +11,3 @@ const client = new Client({
 });
 
 export default client;
-
-
-// TODO: Import Name commands and then the guildMemberAdd event
-// TODO: Look into making roles and channels dynamic

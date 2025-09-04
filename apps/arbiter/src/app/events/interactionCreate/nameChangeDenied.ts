@@ -12,7 +12,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         // Find the name change request by ID
         const request = await prisma.nameChangeRequest.findUnique({
             where: {
-                id: parseInt(requestId)
+                id: parseInt(requestId!)
             },
         });
 
@@ -29,7 +29,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
 
         await prisma.nameChangeRequest.update({
             where: {
-                id: parseInt(requestId)
+                id: parseInt(requestId!)
             },
             data: {
                 denyReason: request.denyReason
