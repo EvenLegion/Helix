@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: nexuspassword
+      POSTGRES_USER: nexususer
+      POSTGRES_DB: nexusdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
