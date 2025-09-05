@@ -32,7 +32,9 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             roles: member.roles.cache,
         }));
 
-    console.log(filteredMembers);
+    //console.log(filteredMembers)
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
 
     try {
@@ -59,11 +61,13 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             })
         }
 
-        await interaction.reply({
+        await interaction.editReply({
             content: "User database has been updated with the latest information.",
-            flags: MessageFlags.Ephemeral
         });
     } catch (error) {
         console.log(`Error updating user database: ${error}`);
+        await interaction.editReply({
+            content: `There was an error updating the user database: ${error}`,
+        });
     }
 }

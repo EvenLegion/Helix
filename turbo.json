@@ -16,7 +16,13 @@
       "dependsOn": ["^build", "^db:generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET","NODE_ENV"]
+      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
+    },
+    "arbiter#build": {
+      "dependsOn": ["^build", "^db:generate"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"],
+      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -28,7 +34,7 @@
       "dependsOn": ["^db:generate"],
       "cache": false,
       "persistent": true,
-      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET","NODE_ENV"]
+      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
     }
   }
 }
