@@ -3,7 +3,7 @@ import { MessageFlags } from "discord.js";
 
 export async function beforeExecute(ctx: MiddlewareContext) {
 
-    //This middleware runs before the get-users command is executed
+    //This middleware runs before all of the development commands
     // @ts-ignore'
     // Filter out users who do not have the Server Staff Role
     if (!ctx.interaction.member.roles.cache.has('1364287451576930326')) {
