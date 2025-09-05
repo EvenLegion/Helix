@@ -20,7 +20,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext ) {
         });
     }
 
-    const ROLE_ID = '1352350908385853541';
+    const ROLE_ID = '1352350908385853541'; // Legionnaire Role ID
 
     const selectedRole = [
         '1356438908212088863',
