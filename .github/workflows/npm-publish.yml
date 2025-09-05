@@ -9,6 +9,9 @@ jobs:
   detect-changes:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       arbiter: ${{ steps.changes.outputs.arbiter }}
     steps:
@@ -19,6 +22,7 @@ jobs:
         uses: dorny/paths-filter@v2
         id: changes
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             arbiter:
               - 'apps/arbiter/**'
