@@ -17,7 +17,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
         });
     }
 
-    const welcomeChannel = guild.channels.cache.find(channel => channel.id === "1378564809120808980");
+    const welcomeChannel = guild.channels.cache.find(channel => channel.id === "1378564809120808980"); // EL Test Discord Channel
     if (!welcomeChannel || !welcomeChannel.isTextBased()) return;
 
     const embed = new EmbedBuilder()
