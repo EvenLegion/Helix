@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react';
-import { House, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import {
     Sidebar,
     SidebarContent,
@@ -14,21 +14,11 @@ import {
 import { IconInnerShadowTop } from "@tabler/icons-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import {authClient} from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
+import { getMenuItemsByGroup } from "@/lib/menu-config";
 
 const data = {
-    navMain: [
-        {
-            title: "Home",
-            url: "#",
-            icon: House,
-        },
-        {
-            title: "Guides",
-            url: "/guides",
-            icon: House,
-        }
-    ]
+    navMain: getMenuItemsByGroup('navMain')
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

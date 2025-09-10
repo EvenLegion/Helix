@@ -3,10 +3,17 @@ import {
     SidebarMenu,
     SidebarGroup,
     SidebarMenuItem,
-    SidebarMenuButton
+    SidebarMenuButton,
+    SidebarGroupLabel,
 } from "@workspace/ui/components/sidebar";
-import { type LucideIcon } from 'lucide-react';
-
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@workspace/ui/components/collapsible";
+import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 export function NavMain({
     items,
@@ -17,20 +24,33 @@ export function NavMain({
         icon?: LucideIcon
     }[]
 }) {
+
+    const pathName = usePathname();
+
+    const isActive = (url: string) => {
+        if (url === '/' && pathName === '/') return true
+        if (url !== '/' && pathName.startsWith(url)) return true
+        return false
+    }
+
     return (
-        <SidebarGroup>
-            <SidebarGroupContent className="flex flex-col gap-2">
-                <SidebarMenu>
-                    {items.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton tooltip={item.title}>
-                                {item.icon && <item.icon />}
-                                <span>{item.title}</span>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    ))}
-                </SidebarMenu>
-            </SidebarGroupContent>
-        </SidebarGroup>
+        <Collapsible defaultOpen className="group/collapsible">
+            <SidebarGroup>
+                <SidebarGroupContent className="flex flex-col gap-2">
+                    <SidebarMenu>
+                        {items.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton tooltip={item.title} isActive={isActive(item.url)} asChild>
+                                    <Link href={item.url}>
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        ))}
+                    </SidebarMenu>
+                </SidebarGroupContent>
+            </SidebarGroup>
+        </Collapsible>
     )
 }

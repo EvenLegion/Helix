@@ -1,77 +1,114 @@
-name: Build and Deploy Arbiter
+# TODO: Modify the workflow for self hosting on the VPS
+# name: Build and Deploy Arbiter
 
-on:
-  pull_request:
-    types: [closed]
-    branches: [master]
+# on:
+#   pull_request:
+#     types: [closed]
+#     branches: [master]
 
-jobs:
-  detect-changes:
-    if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      arbiter: ${{ steps.changes.outputs.arbiter }}
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+# jobs:
+#   detect-changes:
+#     if: github.event.pull_request.merged == true
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       pull-requests: read
+#     outputs:
+#       arbiter: ${{ steps.changes.outputs.arbiter }}
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
 
-      - name: Check for arbiter changes
-        uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
-            arbiter:
-              - 'apps/arbiter/**'
-              - 'packages/database/**'
+#       - name: Check for arbiter changes
+#         uses: dorny/paths-filter@v2
+#         id: changes
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           filters: |
+#             arbiter:
+#               - 'apps/arbiter/**'
+#               - 'packages/database/**'
 
-  build-arbiter:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.arbiter == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+#   build-arbiter:
+#     needs: detect-changes
+#     if: needs.detect-changes.outputs.arbiter == 'true'
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+# name: Build and Deploy Arbiter
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+# on:
+#   pull_request:
+#     types: [closed]
+#     branches: [master]
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+# jobs:
+#   detect-changes:
+#     if: github.event.pull_request.merged == true
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       pull-requests: read
+#     outputs:
+#       arbiter: ${{ steps.changes.outputs.arbiter }}
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9.0.0
+#       - name: Check for arbiter changes
+#         uses: dorny/paths-filter@v2
+#         id: changes
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           filters: |
+#             arbiter:
+#               - 'apps/arbiter/**'
+#               - 'packages/database/**'
 
-      - name: Install dependencies
-        run: pnpm install
+#   build-arbiter:
+#     needs: detect-changes
+#     if: needs.detect-changes.outputs.arbiter == 'true'
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
 
-      - name: Build arbiter
-        run: pnpm run build --filter=arbiter
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
 
-      - name: Configure Git
-        run: |
-          git config user.name "evenlegiontech"
-          git config user.email "evenlegiontech@evenlegion.space"
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
 
-      - name: Commit build output
-        run: |
-          git add -f apps/arbiter/dist/
-          git commit -m "chore: update arbiter build output" || echo "No changes to commit"
-          git push origin master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Setup pnpm
+#         uses: pnpm/action-setup@v2
+#         with:
+#           version: 9.0.0
 
-      - name: Restart Arbiter Server
-        uses: fjogeleit/http-request-action@v1.16.3
-        with:
-          url: 'https://panel.cybrancee.com/api/client/servers/${{ vars.SERVER_ID }}/power'
-          method: 'POST'
-          customHeaders: '{"Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer ${{ secrets.PTERODACTYL_API_KEY }}"}'
-          data: '{"signal": "restart"}'
+#       - name: Install dependencies
+#         run: pnpm install
+
+#       - name: Build arbiter
+#         run: pnpm run build --filter=arbiter
+
+#       - name: Configure Git
+#         run: |
+#           git config user.name "evenlegiontech"
+#           git config user.email "evenlegiontech@evenlegion.space"
+
+#       - name: Commit build output
+#         run: |
+#           git add -f apps/arbiter/dist/
+#           git commit -m "chore: update arbiter build output" || echo "No changes to commit"
+#           git push origin master
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+#       - name: Restart Arbiter Server
+#         uses: fjogeleit/http-request-action@v1.16.3
+#         with:
+#           url: 'https://panel.cybrancee.com/api/client/servers/${{ vars.SERVER_ID }}/power'
+#           method: 'POST'
+#           customHeaders: '{"Accept": "application/json", "Content-Type": "application/json", "Authorization": "Bearer ${{ secrets.PTERODACTYL_API_KEY }}"}'
+#           data: '{"signal": "restart"}'# name: Build and Deploy Arbiter

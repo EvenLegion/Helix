@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "@workspace/ui/styles/globals.css";
-import { SidebarProvider, SidebarTrigger } from "@workspace/ui/components/sidebar"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@workspace/ui/components/sidebar"
 import { AppSidebar } from "@/components/app-sidebar";
 import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SiteHeader } from "@/components/site-header";
+
 
 
 export const metadata: Metadata = {
@@ -23,10 +25,12 @@ export default function RootLayout({ children } : {children: React.ReactNode}) {
         >
             <SidebarProvider>
                 <AppSidebar />
-                <main>
-                    <SidebarTrigger />
-                    {children}
-                </main>
+                <SidebarInset >
+                    <SiteHeader />
+                    <main>
+                        {children}
+                    </main>
+                </SidebarInset>
             </SidebarProvider>
         </ThemeProvider>
         </body>
