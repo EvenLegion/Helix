@@ -1,6 +1,6 @@
-# Turborepo starter
+# Helix
 
-This Turborepo starter is maintained by the Turborepo core team.
+Helix is the monorepo of Arbiter (EvenLegion's Discord Bot) and Nexus (EvenLegion's Website)
 
 ## Using this example
 
@@ -16,11 +16,12 @@ This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@workspace/ui`: a stub React component library shared by both `web` and `docs` applications
+- `Nexus`: a [Next.js](https://nextjs.org/) app
+- `Arbiter`: a Discord.js Discord Bot
+- `@workspace/ui`: a stub React component library used by `Arbiter`
 - `@workspace/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 - `@workspace/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- `@workspace/database`: A Prisma ORM
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
