@@ -1,0 +1,15 @@
+# Environment variables for the application.
+# Environment Flag
+NODE_ENV=development
+
+# Authentication Configuration
+BETTER_AUTH_SECRET=
+BASE_URL=http://localhost:3000
+AUTH_DISCORD_ID=
+AUTH_DISCORD_SECRET=
+
+# EvenLegion Guiild ID
+GUILD_ID=1181061808421871727
+
+# Enter in your development database url here
+DATABASE_URL=
