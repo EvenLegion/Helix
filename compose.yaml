@@ -1,6 +1,0 @@
-services:
-  helix:
-    image: helix
-    build:
-      context: .
-      dockerfile: ./Dockerfile
