@@ -83,13 +83,13 @@ model Verification {
 
 model NameChangeRequest {
   id            Int      @id @default(autoincrement())
-  userId        String   @db.Char(19)
+  userId        String
   currentName   String
   requestedName String
   reason        String
   denyReason    String?
   approved      Boolean  @default(false)
-  approvedBy    String?  @db.Char(19)
+  approvedBy    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -102,11 +102,11 @@ model Merit {
   userID          String    @id @db.VarChar(19)
   merits          Int
   description     String    @db.VarChar(255)
-  additionalNotes String    @map("additonal_notes") @db.VarChar(255)
-  awardedBy       String    @map("awarded_by") @db.Char(19)
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  typeId          Int       @map("type_id")
+  additionalNotes String    @db.VarChar(255)
+  awardedBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  typeId          Int
   meritType       MeritType @relation(fields: [typeId], references: [id])
   user            User      @relation(fields: [userID], references: [id])
 
@@ -119,8 +119,8 @@ model MeritType {
   name          String         @db.VarChar(100)
   description   String         @db.VarChar(255)
   value         Int
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   merit         Merit[]
   eventSessions EventSession[]
 
@@ -131,13 +131,13 @@ model MeritType {
 /// Event session within a guild voice channel
 model EventSession {
   id           Int                       @id @default(autoincrement())
-  guildId      String                    @db.Char(19)
-  channelId    String                    @db.Char(19)
-  startedBy    String                    @db.Char(19)
+  guildId      String
+  channelId    String
+  startedBy    String
   startedAt    DateTime                  @default(now())
   endedAt      DateTime?
   status       String                    @default("ACTIVE") @db.VarChar(16)
-  meritTypeId  Int?                      @map("merit_type_id")
+  meritTypeId  Int?
   meritType    MeritType?                @relation(fields: [meritTypeId], references: [id])
   participants EventSessionParticipant[]
 
@@ -152,7 +152,7 @@ model EventSession {
 model EventSessionParticipant {
   id                   Int          @id @default(autoincrement())
   eventSessionId       Int
-  userId               String       @db.Char(19)
+  userId               String
   totalSecondsPresent  Int          @default(0)
   totalSecondsSpeaking Int          @default(0)
   lastJoinAt           DateTime?
@@ -169,10 +169,10 @@ model Event {
   id          Int       @id @default(autoincrement())
   name        String    @db.VarChar(100)
   description String    @db.VarChar(255)
-  eventDate   DateTime  @map("event_date")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  typeId      Int       @map("type_id")
+  eventDate   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  typeId      Int
   eventType   EventType @relation(fields: [typeId], references: [id])
 
   @@map("event")
@@ -183,8 +183,8 @@ model EventType {
   id          Int      @id
   name        String   @db.VarChar(100)
   description String   @db.VarChar(255)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   Event       Event[]
 
   @@map("event_type")
