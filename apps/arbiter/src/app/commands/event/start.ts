@@ -16,6 +16,13 @@ export const command: CommandData = {
       type: 1, // Subcommand
       options: [
         {
+          name: "merit_type",
+          description: "Merit type to apply for this event",
+          type: 3, // STRING
+          required: true,
+          autocomplete: true,
+        },
+        {
           name: "channel",
           description: "Voice channel to track (optional)",
           type: 7, // CHANNEL
@@ -86,6 +93,19 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   // Note: do not early-return here; each subcommand will handle missing targetVcId with better guidance
 
   if (sub === "start") {
+    // Load MeritType choices for validation/display
+    const types = await prisma.meritType.findMany({ orderBy: { id: 'asc' } });
+    if (!types.length) {
+      return interaction.reply({ content: 'No MeritType entries exist. Please populate MeritType first.', flags: MessageFlags.Ephemeral });
+    }
+    // Read chosen merit type (by name or id)
+    const meritTypeInput = interaction.options.getString('merit_type', true);
+    const chosen = types.find(t => t.name === meritTypeInput || String(t.id) === meritTypeInput);
+    if (!chosen) {
+      const names = types.slice(0, 25).map(t => t.name).join(', ');
+      return interaction.reply({ content: `Invalid merit type. Valid: ${names}${types.length > 25 ? ' …' : ''}`, flags: MessageFlags.Ephemeral });
+    }
+
     // Optional voice channel argument
     const argChannel = interaction.options.getChannel("channel", false) as any | null;
     if (argChannel) {
@@ -143,11 +163,12 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         guildId: guild.id,
         channelId: targetVcId,
         startedBy: interaction.user.id,
+        meritTypeId: chosen.id,
       },
     });
-    console.log(`[EventTrack] /event start by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for channel ${targetVcId} -> session ${session.id}`);
+    console.log(`[EventTrack] /event start by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for channel ${targetVcId} meritType=${chosen.name} -> session ${session.id}`);
     startSessionTracker(client, session.id, guild.id, targetVcId);
-    return interaction.reply({ content: `Started tracking in <#${targetVcId}> (session ${session.id}).`, flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).`, flags: MessageFlags.Ephemeral });
   }
 
   // stop
@@ -192,7 +213,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
 
   // Initialize review state defaults (merit if presence >= 20% of session)
   const key = getReviewStateKey(active.id, interaction.user.id);
-  const defaults = new Map<string, "merit" | "demerit" | "none">();
+  const defaults = new Map<string, "merit" | "none">();
   for (const p of participants) {
     const meritDefault = (p.totalSecondsPresent / sessionSeconds) >= 0.2 ? "merit" : "none";
     defaults.set((p.userId || '').trim(), meritDefault);

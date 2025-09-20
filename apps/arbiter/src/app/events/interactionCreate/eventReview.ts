@@ -107,10 +107,10 @@ export default async function (interaction: Interaction, client: Client) {
 
   if (action === "rb") {
     const userId = (parts[4] || '').trim();
-    const choice = parts[5] as 'merit' | 'demerit' | 'none';
+    const choice = parts[5] as 'merit' | 'none';
     const page = Number(parts[6] ?? 0);
     if (!userId) return interaction.reply({ content: "Missing user id in selection.", flags: MessageFlags.Ephemeral });
-    if (choice !== 'merit' && choice !== 'demerit' && choice !== 'none') {
+    if (choice !== 'merit' && choice !== 'none') {
       return interaction.reply({ content: "Invalid selection.", flags: MessageFlags.Ephemeral });
     }
     setSelection(`${sessionId}:${reviewerId}`, userId, choice);
@@ -126,16 +126,75 @@ export default async function (interaction: Interaction, client: Client) {
 
   if (action === "confirm") {
     const selections = getAllSelections(`${sessionId}:${reviewerId}`);
+    const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
+    if (!session) {
+      return interaction.update({ content: "Session no longer exists.", components: [], embeds: [] });
+    }
+    let meritType: { id: number; name: string; description: string; value: number } | null = null;
+    // Fetch MeritType via Prisma relation (no raw SQL)
+    const sessionWithType = await prisma.eventSession.findUnique({
+      where: { id: sessionId },
+      include: { meritType: true },
+    });
+    if (sessionWithType?.meritType) {
+      meritType = {
+        id: sessionWithType.meritType.id,
+        name: sessionWithType.meritType.name,
+        description: sessionWithType.meritType.description,
+        value: (sessionWithType.meritType as any).value ?? 0,
+      };
+    }
+    if (!meritType) {
+      clearReviewState(`${sessionId}:${reviewerId}`);
+      clearNamesForSession(sessionId);
+      return interaction.update({ content: `No merit type was set for session ${sessionId}. Nothing awarded.`, components: [], embeds: [] });
+    }
+    // Normalize selected user IDs and filter to those marked for merit
+    const toAward = selections
+      .filter(s => s.choice === 'merit')
+      .map(s => ({ userId: (s.userId || '').trim() }))
+      .filter(s => s.userId.length > 0);
+
+    // Verify the users exist in nexus.user — never create users here
+    const awardIds = Array.from(new Set(toAward.map(s => s.userId)));
+    const existingUsers = awardIds.length
+      ? await prisma.user.findMany({ where: { id: { in: awardIds } }, select: { id: true } })
+      : [];
+    const existingSet = new Set(existingUsers.map(u => u.id));
+    const present = toAward.filter(s => existingSet.has(s.userId));
+    const missing = awardIds.filter(id => !existingSet.has(id));
+    if (missing.length) {
+      console.warn(`[EventReview] Skipping ${missing.length} user(s) not found in DB for session ${sessionId}:`, missing);
+    }
+    const notes = `Awarded via event session ${sessionId}`;
+    for (const sel of present) {
+      // Upsert on userID to aggregate merits; if you prefer separate rows, use create instead
+      await prisma.merit.upsert({
+        where: { userID: sel.userId },
+        update: {
+          merits: { increment: meritType.value },
+          description: meritType.description,
+          additionalNotes: notes,
+          awardedBy: reviewerId,
+          typeId: meritType.id,
+        },
+        create: {
+          userID: sel.userId,
+          merits: meritType.value,
+          description: meritType.description,
+          additionalNotes: notes,
+          awardedBy: reviewerId,
+          typeId: meritType.id,
+        },
+      });
+    }
     clearReviewState(`${sessionId}:${reviewerId}`);
     clearNamesForSession(sessionId);
-    const lines = selections.length
-      ? selections.map(s => `• <@${s.userId}>: ${s.choice}`).join("\n")
-      : "No selections made.";
-    return interaction.update({
-      content: `Review confirmed for session ${sessionId}.\n${lines}`,
-      components: [],
-      embeds: [],
-    });
+    const summary = present.length
+      ? `Awarded ${meritType.value} merit(s) of type "${meritType.name}" to: ${present.map(s => `<@${s.userId}>`).join(', ')}`
+      : `No merits awarded.`;
+    const skipped = missing.length ? ` Skipped ${missing.length} user(s) not found in database: ${missing.map(id => `<@${id}>`).join(', ')}` : '';
+    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}`, components: [], embeds: [] });
   }
 
   if (action === "cancel") {

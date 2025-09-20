@@ -99,15 +99,15 @@ model NameChangeRequest {
 }
 
 model Merit {
-  userID          String    @id @db.Char(19)
+  userID          String    @id @db.VarChar(19)
   merits          Int
   description     String    @db.VarChar(255)
-  additonal_notes String    @db.VarChar(255)
-  awarded_by      String    @db.Char(19)
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-  type_id         Int
-  merit_type      MeritType @relation(fields: [type_id], references: [id])
+  additionalNotes String    @map("additonal_notes") @db.VarChar(255)
+  awardedBy       String    @map("awarded_by") @db.Char(19)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  typeId          Int       @map("type_id")
+  meritType       MeritType @relation(fields: [typeId], references: [id])
   user            User      @relation(fields: [userID], references: [id])
 
   @@map("merit")
@@ -115,12 +115,14 @@ model Merit {
 }
 
 model MeritType {
-  id          Int      @id
-  name        String   @db.VarChar(100)
-  description String   @db.VarChar(255)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  merit       Merit[]
+  id            Int            @id
+  name          String         @db.VarChar(100)
+  description   String         @db.VarChar(255)
+  value         Int
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  merit         Merit[]
+  eventSessions EventSession[]
 
   @@map("merit_type")
   @@schema("arbiter")
@@ -135,6 +137,8 @@ model EventSession {
   startedAt    DateTime                  @default(now())
   endedAt      DateTime?
   status       String                    @default("ACTIVE") @db.VarChar(16)
+  meritTypeId  Int?                      @map("merit_type_id")
+  meritType    MeritType?                @relation(fields: [meritTypeId], references: [id])
   participants EventSessionParticipant[]
 
   @@index([guildId, channelId, status])
@@ -165,11 +169,11 @@ model Event {
   id          Int       @id @default(autoincrement())
   name        String    @db.VarChar(100)
   description String    @db.VarChar(255)
-  event_date  DateTime
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  type_id     Int
-  event_type  EventType @relation(fields: [type_id], references: [id])
+  eventDate   DateTime  @map("event_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  typeId      Int       @map("type_id")
+  eventType   EventType @relation(fields: [typeId], references: [id])
 
   @@map("event")
   @@schema("arbiter")
@@ -179,8 +183,8 @@ model EventType {
   id          Int      @id
   name        String   @db.VarChar(100)
   description String   @db.VarChar(255)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
   Event       Event[]
 
   @@map("event_type")

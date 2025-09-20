@@ -1,4 +1,4 @@
-export type ReviewChoice = "merit" | "demerit" | "none";
+export type ReviewChoice = "merit" | "none";
 
 type ReviewState = {
   selections: Map<string, ReviewChoice>; // userId -> choice

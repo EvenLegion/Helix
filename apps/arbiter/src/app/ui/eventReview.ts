@@ -23,7 +23,7 @@ export function buildEventReviewMessage(args: BuildArgs) {
 
   const embed = new EmbedBuilder()
     .setTitle(`Review session ${sessionId} in <#${channelId}>`)
-    .setDescription(`Session length: ${formatDuration(sessionSeconds)}\nSelect Merit/Demerit/None for each participant. Default Merit if >=20% speaking.`)
+    .setDescription(`Session length: ${formatDuration(sessionSeconds)}\nSelect Merit/None for each participant. Default Merit if >=20% presence.`)
     .setColor(0x4b9cd3);
 
   const rows: Array<ActionRowBuilder<any>> = [];
@@ -49,16 +49,12 @@ export function buildEventReviewMessage(args: BuildArgs) {
       .setCustomId(`eventrev:rb:${sessionId}:${reviewerId}:${uid}:merit:${page}`)
       .setLabel("Merit")
       .setStyle(current === 'merit' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-    const demerit = new ButtonBuilder()
-      .setCustomId(`eventrev:rb:${sessionId}:${reviewerId}:${uid}:demerit:${page}`)
-      .setLabel("Demerit")
-      .setStyle(current === 'demerit' ? ButtonStyle.Primary : ButtonStyle.Secondary);
     const none = new ButtonBuilder()
       .setCustomId(`eventrev:rb:${sessionId}:${reviewerId}:${uid}:none:${page}`)
       .setLabel("None")
       .setStyle(current === 'none' ? ButtonStyle.Primary : ButtonStyle.Secondary);
 
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(merit, demerit, none, nameBtn, timeBtn));
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(merit, none, nameBtn, timeBtn));
   }
 
   // Navigation and confirm/cancel
