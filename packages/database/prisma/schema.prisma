@@ -125,3 +125,64 @@ model MeritType {
   @@map("merit_type")
   @@schema("arbiter")
 }
+
+/// Event session within a guild voice channel
+model EventSession {
+  id           Int                       @id @default(autoincrement())
+  guildId      String                    @db.Char(19)
+  channelId    String                    @db.Char(19)
+  startedBy    String                    @db.Char(19)
+  startedAt    DateTime                  @default(now())
+  endedAt      DateTime?
+  status       String                    @default("ACTIVE") @db.VarChar(16)
+  participants EventSessionParticipant[]
+
+  @@index([guildId, channelId, status])
+  @@map("event_session")
+  @@schema("arbiter")
+}
+
+// Status values: ACTIVE | ENDED
+
+/// Aggregate participation per user for an event session
+model EventSessionParticipant {
+  id                   Int          @id @default(autoincrement())
+  eventSessionId       Int
+  userId               String       @db.Char(19)
+  totalSecondsPresent  Int          @default(0)
+  totalSecondsSpeaking Int          @default(0)
+  lastJoinAt           DateTime?
+  lastSpeakAt          DateTime?
+  updatedAt            DateTime     @updatedAt
+  session              EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([eventSessionId, userId])
+  @@map("event_session_participant")
+  @@schema("arbiter")
+}
+
+model Event {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(100)
+  description String    @db.VarChar(255)
+  event_date  DateTime
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  type_id     Int
+  event_type  EventType @relation(fields: [type_id], references: [id])
+
+  @@map("event")
+  @@schema("arbiter")
+}
+
+model EventType {
+  id          Int      @id
+  name        String   @db.VarChar(100)
+  description String   @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  Event       Event[]
+
+  @@map("event_type")
+  @@schema("arbiter")
+}

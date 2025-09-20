@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "Prisma.prisma",
+    "GitHub.copilot"
+  ],
+  "unwantedRecommendations": []
+}

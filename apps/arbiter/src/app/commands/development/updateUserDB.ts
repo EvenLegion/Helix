@@ -17,8 +17,8 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
         });
     }
 
-    const ROLE_ID = '1352350908385853541'; // Legionnaire
-    //const ROLE_ID = '1378564784370225252'; // @everyone for dev
+    // const ROLE_ID = '1352350908385853541'; // Legionnaire
+    const ROLE_ID = '1378564784370225252'; // @everyone for dev
 
     await guild.members.fetch();
 
