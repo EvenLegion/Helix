@@ -1,0 +1,91 @@
+# Event commands — How to use
+
+This guide shows moderators and event hosts how to run and manage voice-based events with the `/event` commands.
+
+## Overview
+- Track participation in one or more voice/stage channels
+- Group multiple channels into a single event review
+- Autocomplete merit type selection
+- Clean up bot-created channels after the event ends
+
+## Permissions you need
+- You must be able to invoke slash commands in the server.
+- For creating extra voice channels with `/event add-vc` (without picking an existing one), the bot needs "Manage Channels".
+
+## Commands
+
+### 1) `/event start`
+Start tracking participation for a voice or stage channel.
+
+Options:
+- `merit_type` (required): Choose what type of merit to award. Autocomplete lets you search by name/description/value.
+- `channel` (optional): Pick a voice/stage channel to track. If omitted, run the command in the target voice channel or in a text channel in the same category.
+
+How to use:
+1) Join the voice/stage channel (or open a text channel under the same category).
+2) Run `/event start` and select the merit type.
+3) Optionally select a specific channel if you aren’t in/near it.
+
+Notes:
+- The bot prevents duplicate active sessions for the same channel.
+- If not given a channel, the bot will resolve the channel based on where you run the command:
+  - If run in a voice/stage channel → that channel is used.
+  - If run in a text/thread channel → the bot looks for a voice/stage channel in the same category.
+
+### 2) `/event add-vc`
+Add or link another voice/stage channel to the current event. Use this when your event needs overflow rooms or multiple parallel rooms, but you still want a single review at the end.
+
+Options:
+- `channel` (optional): An existing voice/stage channel to attach.
+- `name` (optional): If you don’t pick an existing channel, the bot can create a new one with this name under the same category as the main event channel.
+
+How to use:
+1) Run this from the tracked channel (or a text channel in the same category) to auto-target the current event.
+2) Either:
+   - Provide an existing voice/stage `channel` to attach, or
+   - Provide a `name` to create a new channel with copied permissions from the main event channel.
+
+Notes:
+- The bot groups all added channels under one “root” event.
+- The bot copies permission overwrites from the main channel and matches channel type (voice vs stage) when creating a new one.
+- You can’t add a channel that’s already tracked by a different event.
+- If the bot lacks "Manage Channels", creation will fail—attach an existing channel instead.
+
+### 3) `/event stop`
+Stop tracking for the current event and open the review UI.
+
+Options:
+- `channel` (optional): A voice/stage channel belonging to the event you want to stop. If omitted, run the command in/near a channel from the event.
+
+What happens when you stop:
+- All sessions in the event group (main + added channels) are ended together.
+- Participants across all channels are merged into the main session for a single merit review.
+- The review UI opens with participants sorted by presence time.
+- Defaults: Any user present for at least 20% of the event duration is pre-selected for merit.
+- For any bot-created channels, a cleanup watcher starts—when they’re empty, the bot deletes them.
+
+## Tips & troubleshooting
+- “I don’t see the channel I want”: Use the `channel` option explicitly, or run the command from a text channel in the same category.
+- “Bot failed to create a channel”: Make sure the bot role has "Manage Channels". You can still attach an existing channel via the `channel` option.
+- “Multiple events at once”: If more than one event is active in the guild, run `/event add-vc` from a channel that already belongs to the intended event so the bot picks the right group.
+- “Names look odd in review”: The UI prefers stored DB names and overlays guild display names for the first page. It may backfill missing users when enabled by admins.
+
+## Quick examples
+
+- Start an event in the current voice channel:
+  - `/event start merit_type: Training`
+
+- Start an event for a specific stage channel:
+  - `/event start merit_type: Ceremony channel: #Stage 1`
+
+- Add an overflow room by creating a new channel (copied permissions):
+  - `/event add-vc name: Overflow Room`
+
+- Attach an existing voice channel to your current event:
+  - `/event add-vc channel: #Ops VC`
+
+- Stop the event and open the review UI:
+  - `/event stop` (use `channel:` if you’re not in/near the event’s channels)
+
+---
+If you have questions or run into issues, contact a moderator or an admin.

@@ -14,3 +14,11 @@ npx commandkit dev
 
 -   [Documentation](https://commandkit.dev)
 -   [Discord](https://ctrl.lol/discord)
+
+## Bot How-To
+
+-   Event commands: see `docs/event-commands.md` for a step-by-step guide to `/event start`, `/event add-vc`, and `/event stop`.
+
+## Developer Docs
+
+-   Technical overview for the `/event` feature: see `docs/event-tech-overview.md`.
