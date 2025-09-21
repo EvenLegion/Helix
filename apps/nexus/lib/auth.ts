@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
-import { prismaAdapter} from "better-auth/adapters/prisma";
-import { nextCookies} from "better-auth/next-js";
+import { organization } from "better-auth/plugins";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
 
 
@@ -116,7 +117,10 @@ export const auth: ReturnType<typeof betterAuth> = betterAuth({
             }
         }
     },
-    plugins: [nextCookies()],
+    plugins: [
+        nextCookies(),
+        organization()
+    ],
 });
 
 async function updateUserData(account:Account) {
