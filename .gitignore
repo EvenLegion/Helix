@@ -37,6 +37,22 @@ yarn-error.log*
 .DS_Store
 *.pem
 
+# Local scaffolds (do not commit)
+my-turborepo/
+
+# Local Postgres data (docker volume bind)
+data/
+
+# Prisma generated client (prefer generate step over committing artifacts)
+packages/database/generated/
+
+# Database backups/exports
+packages/database/backups/
+
+# Local env presets (non-standard .env files)
+packages/database/env-development
+apps/nexus/env-development
+
 # Prisma
 /data
 /packages/database/generated/
@@ -44,3 +60,6 @@ yarn-error.log*
 # JetBrains
 .idea
 TODO.txt
+
+# TurboRepo
+my-turborepo/
