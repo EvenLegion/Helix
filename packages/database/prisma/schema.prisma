@@ -130,18 +130,26 @@ model MeritType {
 
 /// Event session within a guild voice channel
 model EventSession {
-  id           Int                       @id @default(autoincrement())
-  guildId      String
-  channelId    String
-  startedBy    String
-  startedAt    DateTime                  @default(now())
-  endedAt      DateTime?
-  status       String                    @default("ACTIVE") @db.VarChar(16)
-  meritTypeId  Int?
-  meritType    MeritType?                @relation(fields: [meritTypeId], references: [id])
-  participants EventSessionParticipant[]
+  id            Int                       @id @default(autoincrement())
+  /// If set, this session is part of a group whose root session has this id
+  rootSessionId Int?
+  /// Self-relation to group sessions under a single root
+  root          EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
+  children      EventSession[]            @relation("EventSessionGroup")
+  guildId       String
+  channelId     String
+  /// True if the voice/stage channel was created by the bot
+  createdByBot  Boolean                   @default(false)
+  startedBy     String
+  startedAt     DateTime                  @default(now())
+  endedAt       DateTime?
+  status        String                    @default("ACTIVE") @db.VarChar(16)
+  meritTypeId   Int?
+  meritType     MeritType?                @relation(fields: [meritTypeId], references: [id])
+  participants  EventSessionParticipant[]
 
   @@index([guildId, channelId, status])
+  @@index([rootSessionId, status])
   @@map("event_session")
   @@schema("arbiter")
 }

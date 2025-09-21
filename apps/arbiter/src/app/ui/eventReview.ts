@@ -29,7 +29,7 @@ export function buildEventReviewMessage(args: BuildArgs) {
   const rows: Array<ActionRowBuilder<any>> = [];
 
   for (const p of slice) {
-    const uid = (p.userId || '').trim();
+    const uid = p.userId;
     const display = nameMap?.get(uid) ?? uid;
     const timeText = formatDuration(p.totalSecondsPresent);
     const safeName = display.length > 40 ? display.slice(0, 37) + '…' : display;

@@ -37,7 +37,7 @@ export default async function (interaction: Interaction, client: Client) {
     });
     // Build name map via DB for speed
     const nameMap = getPageNames(sessionId, page) ?? new Map<string, string>();
-    const ids = participants.map(p => (p.userId || '').trim());
+    const ids = participants.map(p => p.userId);
     if (ids.length) {
       const t0 = Date.now();
       const users = await prisma.user.findMany({
@@ -73,7 +73,7 @@ export default async function (interaction: Interaction, client: Client) {
         try {
           const PAGE_SIZE = 4;
           const start = Math.max(0, page) * PAGE_SIZE;
-          const pageIds = participants.slice(start, start + PAGE_SIZE).map(p => (p.userId || '').trim());
+          const pageIds = participants.slice(start, start + PAGE_SIZE).map(p => p.userId);
           if (pageIds.length) {
             const t1 = Date.now();
             const fetched = await guild.members.fetch({ user: pageIds, withPresences: false });
@@ -106,7 +106,7 @@ export default async function (interaction: Interaction, client: Client) {
   };
 
   if (action === "rb") {
-    const userId = (parts[4] || '').trim();
+    const userId = parts[4] || '';
     const choice = parts[5] as 'merit' | 'none';
     const page = Number(parts[6] ?? 0);
     if (!userId) return interaction.reply({ content: "Missing user id in selection.", flags: MessageFlags.Ephemeral });
@@ -152,7 +152,7 @@ export default async function (interaction: Interaction, client: Client) {
     // Normalize selected user IDs and filter to those marked for merit
     const toAward = selections
       .filter(s => s.choice === 'merit')
-      .map(s => ({ userId: (s.userId || '').trim() }))
+      .map(s => ({ userId: s.userId || '' }))
       .filter(s => s.userId.length > 0);
 
     // Verify the users exist in nexus.user — never create users here

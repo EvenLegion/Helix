@@ -25,8 +25,8 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     const filteredMembers = guild.members.cache
         .filter(member => member.roles.cache.has(ROLE_ID))
         .map(member => ({
-            user_id: member.user.id,
-            guild_id: member.guild.id,
+            userId: member.user.id,
+            guildId: member.guild.id,
             username: member.user.username,
             nickname: member.nickname || null,
             roles: member.roles.cache,
@@ -42,14 +42,14 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 
             await prisma.user.upsert({
                 where: {
-                    id: member.user_id,
+                    id: member.userId,
                 },
                 update: {
                     username: member.username,
                     nickname: member.nickname || ' ',
                 },
                 create: {
-                    id: member.user_id,
+                    id: member.userId,
                     username: member.username,
                     nickname: member.nickname || ' ',
                     email: ' ',

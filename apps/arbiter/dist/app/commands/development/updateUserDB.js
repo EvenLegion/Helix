@@ -12,11 +12,11 @@ async function chatInput({ interaction }) {
 		content: "This command can only be used in a server.",
 		flags: MessageFlags.Ephemeral
 	});
-	const ROLE_ID = "1352350908385853541";
+	const ROLE_ID = "1378564784370225252";
 	await guild.members.fetch();
 	const filteredMembers = guild.members.cache.filter((member) => member.roles.cache.has(ROLE_ID)).map((member) => ({
-		user_id: member.user.id,
-		guild_id: member.guild.id,
+		userId: member.user.id,
+		guildId: member.guild.id,
 		username: member.user.username,
 		nickname: member.nickname || null,
 		roles: member.roles.cache
@@ -24,13 +24,13 @@ async function chatInput({ interaction }) {
 	await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 	try {
 		for (const member of filteredMembers) await prisma.user.upsert({
-			where: { id: member.user_id },
+			where: { id: member.userId },
 			update: {
 				username: member.username,
 				nickname: member.nickname || " "
 			},
 			create: {
-				id: member.user_id,
+				id: member.userId,
 				username: member.username,
 				nickname: member.nickname || " ",
 				email: " ",
