@@ -94,7 +94,7 @@ model NameChangeRequest {
   updatedAt     DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("name_change_request")
+  @@map("nameChangeRequest")
   @@schema("arbiter")
 }
 
@@ -124,7 +124,7 @@ model MeritType {
   merit         Merit[]
   eventSessions EventSession[]
 
-  @@map("merit_type")
+  @@map("meritType")
   @@schema("arbiter")
 }
 
@@ -150,7 +150,7 @@ model EventSession {
 
   @@index([guildId, channelId, status])
   @@index([rootSessionId, status])
-  @@map("event_session")
+  @@map("eventSession")
   @@schema("arbiter")
 }
 
@@ -169,7 +169,7 @@ model EventSessionParticipant {
   session              EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
 
   @@unique([eventSessionId, userId])
-  @@map("event_session_participant")
+  @@map("eventSessionParticipant")
   @@schema("arbiter")
 }
 
@@ -195,6 +195,6 @@ model EventType {
   updatedAt   DateTime @updatedAt
   Event       Event[]
 
-  @@map("event_type")
+  @@map("eventType")
   @@schema("arbiter")
 }
