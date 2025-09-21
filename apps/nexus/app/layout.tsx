@@ -4,7 +4,6 @@ import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
 import { AppSidebar } from "@/components/app-sidebar";
 import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SiteHeader } from "@/components/site-header";
 import { Toaster } from "sonner";
 
 
@@ -26,7 +25,6 @@ export default function RootLayout({ children } : {children: React.ReactNode}) {
             <SidebarProvider>
                 <AppSidebar />
                 <SidebarInset >
-                    <SiteHeader />
                     <main>
                         {children}
                     </main>

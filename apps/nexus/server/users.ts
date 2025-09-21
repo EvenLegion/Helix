@@ -12,7 +12,17 @@ export const getCurrentUser = async () => {
     });
 
     if (!session) {
-        redirect("/login");
+        // No session, redirect to Discord OAuth
+        const signInResponse = await auth.api.signInSocial({
+            body: {
+                provider: "discord",
+                callbackURL: "/admin"
+            },
+        });
+
+        if (signInResponse?.url) {
+            redirect(signInResponse.url);
+        }
     }
 
     console.log("Session", session);
@@ -28,7 +38,18 @@ export const getCurrentUser = async () => {
     });
 
     if (!currentUser) {
-        redirect("/login");
+        // No session, redirect to Discord OAuth
+        const signInResponse = await auth.api.signInSocial({
+            body: {
+                provider: "discord",
+                callbackURL: "/admin"
+            },
+        });
+
+        if (signInResponse?.url) {
+            redirect(signInResponse.url);
+
+        }
     }
 
     const member = await prisma.member.findFirst({

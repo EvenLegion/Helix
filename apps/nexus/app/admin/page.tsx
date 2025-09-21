@@ -1,5 +1,3 @@
-
-
 import {
     Dialog,
     DialogContent,
@@ -11,6 +9,12 @@ import {
 import { Button } from '@workspace/ui/components/button'
 import { CreateOrganizationForm } from 'components/forms/create-organization-form'
 import { getOrganizations } from 'server/organizations'
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardContent
+} from '@workspace/ui/components/card'
 
 export default async function Dashboard() {
     const userOrgs = await getOrganizations()
@@ -23,20 +27,13 @@ export default async function Dashboard() {
     // TODO: Make page uniformed create subpage for organizations and roles
     return (
         <>
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button>Create Organization</Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Create Organization</DialogTitle>
-                    <DialogDescription>
-                        Create a new organization to collaborate with your team.
-                    </DialogDescription>
-                </DialogHeader>
-                <CreateOrganizationForm />
-            </DialogContent>
-        </Dialog>
+        <div className="min-h-svh p-4">
+            <Card className="w-full max-w-sm">
+                <CardHeader>
+                    <CardTitle>Card Title</CardTitle>
+                </CardHeader>
+            </Card>
+        </div>
         </>
     )
 }

@@ -11,4 +11,3 @@ export async function getOrganizations() {
 
     return (currentUser)
 }
-// TODO: Refactor to use prisma include features to not have to do a multistep query
