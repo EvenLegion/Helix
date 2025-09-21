@@ -64,3 +64,6 @@ TODO.txt
 
 # TurboRepo
 my-turborepo/
+
+# VS Code editor settings (keep local)
+.vscode/
