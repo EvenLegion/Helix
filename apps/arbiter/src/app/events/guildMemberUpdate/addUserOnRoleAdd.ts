@@ -1,10 +1,12 @@
 import { GuildMember } from "discord.js";
 import { prisma } from "@workspace/db";
+import { childLogger } from "@workspace/logger";
 
 // Target role that triggers user upsert when added
 const TARGET_ROLE_ID = "1352350908385853541";
 
 export default async function (oldMember: GuildMember | any, newMember: GuildMember) {
+    const log = childLogger({ mod: 'guildMemberUpdate', event: 'roleAdd', guildId: newMember.guild.id, userId: newMember.user.id });
     try {
         // Ensure we have role sets to compare
         const oldRoles = new Set<string>(oldMember?.roles?.cache?.keys?.() ? Array.from(oldMember.roles.cache.keys()) : []);
@@ -42,6 +44,6 @@ export default async function (oldMember: GuildMember | any, newMember: GuildMem
             });
         }
     } catch (err) {
-        console.error("[guildMemberUpdate] Failed to upsert user on role add:", err);
+        log.error({ err }, "Failed to upsert user on role add");
     }
 }

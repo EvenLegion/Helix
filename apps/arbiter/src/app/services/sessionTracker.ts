@@ -1,5 +1,6 @@
 import { ChannelType, VoiceChannel, StageChannel } from "discord.js";
 import { prisma } from "@workspace/db";
+import { childLogger } from "@workspace/logger";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
@@ -14,6 +15,7 @@ const VERBOSE = ["1", "true", "on", "yes"].includes(String(process.env.EVENT_TRA
 export async function startSessionTracker(client: any, sessionId: number, guildId: string, vcId: string) {
   // Avoid duplicate trackers per session
   if (activeTimers.has(sessionId)) return;
+  const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
 
   const tick = async () => {
     try {
@@ -22,7 +24,7 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
         // End session if channel not found
         await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
-        console.log(`[EventTrack] Session ${sessionId}: channel ${vcId} not found; ending session.`);
+        log.warn("Channel not found; ending session");
         stopSessionTracker(sessionId);
         return;
       }
@@ -87,16 +89,14 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       prevMemberNamesBySession.set(sessionId, currentNames);
 
       const chanName = (vc as any).name ?? vcId;
-      console.log(
-        `[EventTrack] ${now.toISOString()} | session ${sessionId} | #${chanName} | members:${members.size} | talk-ish:${speakingCandidates.length}`
-      );
+      log.debug({ ts: now.toISOString(), channelName: chanName, members: members.size, speakingLike: speakingCandidates.length }, "Tick");
       if (joined.length || left.length) {
         if (joined.length) {
           const joinedPretty = joined.map(id => {
             const m = members.get(id);
             return m ? `${m.displayName} (${id})` : id;
           }).join(", ");
-          console.log(`  + joined: ${joinedPretty}`);
+          log.debug({ joined, pretty: joinedPretty }, "+ joined");
         }
         if (left.length) {
           const leftPretty = left.map(id => {
@@ -104,7 +104,7 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
             const name = prevNames.get(id) || (vc.guild.members.cache.get(id)?.displayName) || id;
             return `${name} (${id})`;
           }).join(", ");
-          console.log(`  - left: ${leftPretty}`);
+          log.debug({ left, pretty: leftPretty }, "- left");
         }
       }
       if (VERBOSE && members.size) {
@@ -116,18 +116,18 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
             v.selfDeaf ? "selfDeaf" : null,
             v.serverDeaf ? "serverDeaf" : null,
           ].filter(Boolean);
-          console.log(`    - ${m.displayName} (${m.id}) ${flags.length ? `[${flags.join(", ")}]` : "[open]"}`);
+          log.debug({ memberId: m.id, displayName: m.displayName, flags }, "member");
         }
       }
 
     } catch (err) {
       // Stop tracker if session was deleted or serious errors occur
-      console.error("[EventTrack] Session tracker error", err);
+      log.error({ err }, "Session tracker error");
     }
   };
 
   // Run immediately then on interval
-  console.log(`[EventTrack] Starting session tracker ${sessionId} for guild ${guildId}, channel ${vcId}; sample=${SAMPLE_SECONDS}s.`);
+  log.debug({ sampleSeconds: SAMPLE_SECONDS }, "Starting session tracker");
   await tick();
   const timer = setInterval(tick, SAMPLE_SECONDS * 1000);
   activeTimers.set(sessionId, timer);
@@ -139,6 +139,7 @@ export function stopSessionTracker(sessionId: number) {
     clearInterval(t);
     activeTimers.delete(sessionId);
     prevMembersBySession.delete(sessionId);
-    console.log(`[EventTrack] Stopped session tracker ${sessionId}.`);
+    const log = childLogger({ mod: "eventTrack", sessionId });
+    log.debug("Stopped session tracker");
   }
 }

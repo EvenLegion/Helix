@@ -1,4 +1,5 @@
 import { ChannelType, StageChannel, VoiceChannel, PermissionsBitField } from "discord.js";
+import { childLogger } from "@workspace/logger";
 
 const CLEANUP_INTERVAL_MS = 10_000; // 10s
 const CLEANUP_TTL_MS = 30 * 60_000; // 30 minutes safety window
@@ -10,6 +11,7 @@ export function startChannelCleanupWatcher(client: any, guildId: string, channel
     if (activeCleanups.has(key)) return; // already watching
 
     const startedAt = Date.now();
+    const log = childLogger({ mod: "eventTrack", sub: "cleanup", guildId, channelId });
 
     const tick = async () => {
         try {
@@ -39,9 +41,9 @@ export function startChannelCleanupWatcher(client: any, guildId: string, channel
                 // Try to delete; swallow permission issues with a log
                 try {
                     await vc.delete("Event ended: bot-created channel cleanup (empty)");
-                    console.log(`[EventTrack] Deleted empty channel ${channelId}.`);
+                    log.debug("Deleted empty channel");
                 } catch (e) {
-                    console.warn(`[EventTrack] Failed to delete channel ${channelId}:`, e);
+                    log.warn({ err: e }, "Failed to delete channel");
                 }
                 stopChannelCleanupWatcher(channelId);
                 return;
@@ -49,11 +51,11 @@ export function startChannelCleanupWatcher(client: any, guildId: string, channel
 
             // TTL guard — stop watching after window
             if (Date.now() - startedAt > CLEANUP_TTL_MS) {
-                console.log(`[EventTrack] Cleanup watcher TTL reached for channel ${channelId}, stopping.`);
+                log.debug("Cleanup watcher TTL reached; stopping");
                 stopChannelCleanupWatcher(channelId);
             }
         } catch (e) {
-            console.warn("[EventTrack] Cleanup watcher tick error", e);
+            log.warn({ err: e }, "Cleanup watcher tick error");
         }
     };
 

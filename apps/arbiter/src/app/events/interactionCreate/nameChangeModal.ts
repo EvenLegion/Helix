@@ -10,6 +10,7 @@ import {
     TextChannel
 } from "discord.js";
 import { prisma } from "@workspace/db"
+import { forInteraction } from "@workspace/logger";
 
 export default async function (interaction: ModalSubmitInteraction, client: Client) {
 
@@ -36,14 +37,14 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
             }
         })
 
-        // Here you would handle the name change request, e.g., save it to a database or notify an admin
-        console.log(`A name change request was submitted by ${interaction.user.tag}. The requested name is ${newName}`);
+        const log = forInteraction(interaction).child({ mod: 'nameChange', action: 'request' });
+        log.debug({ requestedName: newName }, 'Name change request submitted');
 
         //Get the request ID
         const requestId = nameChangeRequest.id;
 
         // Reply to the interaction with a confirmation message
-        await interaction.editReply({ content: `We have received your name change request. The requested name is: **${newName}**. The request ID is **${requestId}**`});
+        await interaction.editReply({ content: `We have received your name change request. The requested name is: **${newName}**. The request ID is **${requestId}**` });
 
         //Send to requests to thread
         const logChannel = interaction.guild?.channels.cache.get('1388756021790638160') as TextChannel;
@@ -59,7 +60,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         });
 
         //Ping the user and staff in the thread
-        const rolesToPing = ['1378564862245863536' ] // DEV Roles
+        const rolesToPing = ['1378564862245863536'] // DEV Roles
         //const rolesToPing = ['1302658626795733013', '1378474882811170938' ] // PROD Roles
 
         const mentions = `${rolesToPing.map(roleId => `<@&${roleId}>`).join(' ')}`;
@@ -98,7 +99,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
              */
         );
 
-        await  thread.send({
+        await thread.send({
             embeds: [embed],
             components: [row],
         });

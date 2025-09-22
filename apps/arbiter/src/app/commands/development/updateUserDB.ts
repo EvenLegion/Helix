@@ -1,6 +1,7 @@
 import type { CommandData, ChatInputCommandContext } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
+import { forInteraction } from "@workspace/logger";
 
 export const command: CommandData = {
     name: 'import-users',
@@ -8,6 +9,7 @@ export const command: CommandData = {
 }
 
 export async function chatInput({ interaction }: ChatInputCommandContext) {
+    const log = forInteraction(interaction).child({ mod: 'dev', cmd: 'import-users' });
     const guild = interaction.guild;
 
     if (!guild) {
@@ -65,7 +67,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             content: "User database has been updated with the latest information.",
         });
     } catch (error) {
-        console.log(`Error updating user database: ${error}`);
+        log.error({ err: error }, 'Error updating user database');
         await interaction.editReply({
             content: `There was an error updating the user database: ${error}`,
         });

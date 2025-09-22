@@ -1,5 +1,6 @@
 import { Client } from 'discord.js';
 import { prisma } from '@workspace/db';
+import { childLogger } from '@workspace/logger';
 
 const client = new Client({
   intents: [
@@ -20,12 +21,14 @@ const wantWarmup = isOn(process.env.PRISMA_WARMUP || process.env.PRISMA_LOG_EVEN
 if (wantWarmup && process.env.NODE_ENV !== 'production') {
   (async () => {
     try {
-      console.log('[Prisma:warmup] ping...');
+      const log = childLogger({ mod: 'prisma', sub: 'warmup' });
+      log.debug('ping...');
       // Cheap no-op query to establish connection and trigger logging banners
       await prisma.$queryRaw`SELECT 1`;
-      console.log('[Prisma:warmup] ready');
+      log.debug('ready');
     } catch (e) {
-      console.warn('[Prisma:warmup] failed', e);
+      const log = childLogger({ mod: 'prisma', sub: 'warmup' });
+      log.warn({ err: e }, 'failed');
     }
   })();
 }

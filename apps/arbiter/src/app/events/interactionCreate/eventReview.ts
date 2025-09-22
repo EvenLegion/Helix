@@ -4,12 +4,15 @@ import { setSelection, getAllSelections, clearReviewState } from "../../services
 import { getPageNames, setPageNames, clearNamesForSession } from "../../services/nameCache.ts";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { syncNicknameAuto } from "../../services/rankSync.ts";
+import { forInteraction } from "@workspace/logger";
 
 export default async function (interaction: Interaction, client: Client) {
   // Only handle component interactions with our customId prefix
   if (!interaction.isButton()) return;
   const id = interaction.customId;
   if (!id || !id.startsWith("eventrev:")) return;
+
+  const log = forInteraction(interaction).child({ mod: "eventReview" });
 
   const parts = id.split(":");
   // Formats:
@@ -45,17 +48,17 @@ export default async function (interaction: Interaction, client: Client) {
         where: { id: { in: ids } },
         select: { id: true, nickname: true, name: true, username: true },
       });
-      console.log(`[EventReview] DB name lookup (page ${page}): ${users.length}/${ids.length} in ${Date.now() - t0}ms`);
-      console.log(`[EventReview] DB rows (page ${page}):`, users);
+      log.debug({ page, found: users.length, requested: ids.length, ms: Date.now() - t0 }, "DB name lookup");
+      log.debug({ page, users }, "DB rows");
       const foundIds = new Set(users.map(u => u.id));
       const missing = ids.filter(id => !foundIds.has(id));
-      if (missing.length) console.log(`[EventReview] DB missing ids (page ${page}):`, missing.slice(0, 10), missing.length > 10 ? '…' : '');
+      if (missing.length) log.debug({ page, missing: missing.slice(0, 10), truncated: missing.length > 10 }, "DB missing ids");
       for (const u of users) {
         const disp = u.nickname || u.name || u.username || u.id;
         nameMap.set(u.id, disp);
       }
       const dbPreview = users.map(u => [u.id, nameMap.get(u.id)]);
-      console.log(`[EventReview] DB nameMap (page ${page}):`, dbPreview);
+      log.debug({ page, preview: dbPreview }, "DB nameMap preview");
       // Fallbacks from Discord caches for any missing, then override the current page with live guild display names
       const guild = interaction.guild;
       for (const uid of ids) {
@@ -78,13 +81,13 @@ export default async function (interaction: Interaction, client: Client) {
           if (pageIds.length) {
             const t1 = Date.now();
             const fetched = await guild.members.fetch({ user: pageIds, withPresences: false });
-            console.log(`[EventReview] Guild fetch page ${page}: fetched ${fetched.size}/${pageIds.length} in ${Date.now() - t1}ms`);
+            log.debug({ page, fetched: fetched.size, requested: pageIds.length, ms: Date.now() - t1 }, "Guild fetch page");
             fetched.forEach(m => {
               nameMap.set(m.id, m.displayName || m.user.username || m.id);
             });
             setPageNames(sessionId, page, nameMap);
             const preview = participants.slice(start, start + PAGE_SIZE).map(p => [p.userId, nameMap.get(p.userId)]);
-            console.log(`[EventReview] Page ${page} labels:`, preview);
+            log.debug({ page, preview }, "Page labels");
           }
         } catch {
           // ignore fetch errors
@@ -178,7 +181,7 @@ export default async function (interaction: Interaction, client: Client) {
     const present = toAward.filter(s => existingSet.has(s.userId));
     const missing = awardIds.filter(id => !existingSet.has(id));
     if (missing.length) {
-      console.warn(`[EventReview] Skipping ${missing.length} user(s) not found in DB for session ${sessionId}:`, missing);
+      log.warn({ sessionId, missing }, "Skipping users not found in DB");
     }
     const notes = `Awarded via event session ${sessionId}`;
     const awardedUserIds: string[] = [];

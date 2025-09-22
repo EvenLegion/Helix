@@ -8,6 +8,7 @@ import {
     TextInputStyle
 } from "discord.js";
 import { prisma } from "@workspace/db";
+import { forInteraction } from "@workspace/logger";
 
 export default async function (interaction: ButtonInteraction, client: Client) {
     // Check if the interaction is a button interaction
@@ -35,6 +36,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     const member = await interaction.guild?.members.fetch(request.userId);
 
     if (action === 'approve') {
+        const log = forInteraction(interaction).child({ mod: 'nameChange', action: 'approve', requestId });
 
         // Change the member's nickname
         try {
@@ -71,7 +73,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
             const DEV_BYPASS = truthy.has(String(process.env.DEV_ALLOW_NICK_EDIT || '').toLowerCase()) || truthy.has(String(process.env.ALLOW_NICK_DEV_APPROVE || '').toLowerCase());
             const missingPerms = error?.code === 50013 || String(error?.message || '').includes('Missing Permissions');
             if (DEV_BYPASS && missingPerms) {
-                console.warn('[NameChange] Dev bypass: missing permissions; proceeding with approval without changing nickname.');
+                log.warn('Dev bypass: missing permissions; proceeding with approval without changing nickname.');
                 // Proceed with approval and DB updates without changing the nickname
                 await interaction.reply({
                     content: `Name change request approved (dev bypass). ${request.currentName} would be set to ${request.requestedName}, but bot lacks permissions in this environment.`,
@@ -101,7 +103,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
                 }
                 return;
             }
-            console.error('Failed to change nickname:', error);
+            log.error({ err: error }, 'Failed to change nickname');
             return interaction.reply({
                 content: 'Failed to change nickname. Please check my permissions.',
                 flags: MessageFlags.Ephemeral

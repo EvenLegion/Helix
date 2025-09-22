@@ -2,6 +2,7 @@ import type { ChatInputCommandContext, CommandData } from "commandkit";
 import { ChannelType, MessageFlags, VoiceChannel, StageChannel, PermissionsBitField } from "discord.js";
 import { prisma } from "@workspace/db";
 import { startSessionTracker, stopSessionTracker } from "../../services/sessionTracker";
+import { forInteraction as loggerForInteraction } from "@workspace/logger";
 import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { setPageNames } from "../../services/nameCache.ts";
@@ -80,10 +81,12 @@ export const command: CommandData = {
 export async function chatInput({ interaction, client }: ChatInputCommandContext) {
   const sub = interaction.options.getSubcommand();
   if (sub !== "start" && sub !== "stop" && sub !== "add-vc") return;
+  const log = loggerForInteraction(interaction).child({ mod: "event", sub });
 
   // Support running from a voice channel or a text/thread channel in the same category
   const channel = interaction.channel;
   if (!channel) {
+    log.warn("No interaction.channel; replying with error");
     return interaction.reply({ content: "Couldn't resolve the channel for this command.", flags: MessageFlags.Ephemeral });
   }
 
@@ -92,6 +95,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   // 2) Look for an active voice channel in the same category
   const guild = interaction.guild;
   if (!guild) {
+    log.warn("No guild on interaction; replying with error");
     return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
   }
 
@@ -125,12 +129,14 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     // Load MeritType choices for validation/display
     const types = await prisma.meritType.findMany({ orderBy: { id: 'asc' } });
     if (!types.length) {
+      log.warn("No MeritType rows found; prompting user to populate");
       return interaction.reply({ content: 'No MeritType entries exist. Please populate MeritType first.', flags: MessageFlags.Ephemeral });
     }
     // Read chosen merit type (by name or id)
     const meritTypeInput = interaction.options.getString('merit_type', true);
     const chosen = types.find(t => t.name === meritTypeInput || String(t.id) === meritTypeInput);
     if (!chosen) {
+      log.warn({ input: meritTypeInput }, "Invalid merit type selection");
       const names = types.slice(0, 25).map(t => t.name).join(', ');
       return interaction.reply({ content: `Invalid merit type. Valid: ${names}${types.length > 25 ? ' …' : ''}`, flags: MessageFlags.Ephemeral });
     }
@@ -141,6 +147,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       if (argChannel.type === ChannelType.GuildVoice || argChannel.type === ChannelType.GuildStageVoice) {
         targetVcId = argChannel.id as string;
       } else {
+        log.warn({ argType: argChannel.type }, "Non-voice channel provided to 'channel' option");
         return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
       }
     }
@@ -152,6 +159,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         orderBy: { startedAt: "desc" },
       });
       if (existing) {
+        log.warn({ targetVcId, existingId: existing.id }, "Duplicate active session for channel");
         return interaction.reply({ content: `A session is already active for <#${targetVcId}> (session ${existing.id}).`, flags: MessageFlags.Ephemeral });
       }
     }
@@ -181,6 +189,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     }
 
     if (!targetVcId) {
+      log.warn("Unable to resolve a target voice channel for start");
       return interaction.reply({
         content: "Couldn't resolve a voice channel. Run this in the voice channel (or its text channel) or pass the 'channel' option.",
         flags: MessageFlags.Ephemeral,
@@ -190,6 +199,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     const descOptRaw = interaction.options.getString('description', true) || '';
     const descOpt = descOptRaw.trim().slice(0, 255);
     if (descOpt.length < 5) {
+      log.warn("Description shorter than minimum length");
       return interaction.reply({ content: 'Description must be at least 5 characters long.', flags: MessageFlags.Ephemeral });
     }
     const session = await prisma.eventSession.create({
@@ -201,7 +211,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         awardDescription: descOpt,
       },
     });
-    console.log(`[EventTrack] /event start by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for channel ${targetVcId} meritType=${chosen.name} -> session ${session.id} desc=${descOpt ?? '-'}`);
+    log.debug({ userId: interaction.user.id, guildId: guild.id, channelId: targetVcId, sessionId: session.id, meritType: chosen.name }, "event.start created");
     startSessionTracker(client, session.id, guild.id, targetVcId);
     return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).\nDescription: ${descOpt}`, flags: MessageFlags.Ephemeral });
   }
@@ -243,6 +253,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       if (addArgChannel.type === ChannelType.GuildVoice || addArgChannel.type === ChannelType.GuildStageVoice) {
         addTargetVcId = addArgChannel.id as string;
       } else {
+        log.warn({ argType: addArgChannel.type }, "Non-voice channel provided to add-vc 'channel' option");
         return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
       }
     }
@@ -274,6 +285,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       // Permission pre-check: Manage Channels required
       const me = guild.members.me ?? await guild.members.fetchMe().catch(() => null);
       if (!me || !me.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+        log.warn("Missing ManageChannels for channel creation");
         return interaction.reply({
           content: "I don't have permission to create channels. Please grant 'Manage Channels' (or 'Administrator') to my role, or pass an existing channel via the 'channel' option.",
           flags: MessageFlags.Ephemeral,
@@ -342,6 +354,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         createdChannel = created as any;
         finalVcId = (created as any).id as string;
       } catch (e: any) {
+        log.error({ err: e, parentId, computedName, type: newType }, "Failed to create voice channel");
         const code = (e && typeof e.code !== 'undefined') ? ` (code ${e.code})` : '';
         const hint = e?.code === 50013
           ? "I need 'Manage Channels' permission, or use /event add-vc with the 'channel' option to attach an existing channel."
@@ -360,8 +373,10 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       const existingRootId = existing.rootSessionId ?? existing.id;
       const rootId = root.id;
       if (existingRootId === rootId) {
+        log.warn({ finalVcId, existingId: existing.id, rootId }, "Channel already part of current event");
         return interaction.reply({ content: `That channel <#${finalVcId}> is already part of this event (session ${existing.id}).`, flags: MessageFlags.Ephemeral });
       }
+      log.warn({ finalVcId, existingRootId, rootId }, "Channel tracked in a different event");
       return interaction.reply({ content: `That channel <#${finalVcId}> is already being tracked for a different event (session ${existingRootId}).`, flags: MessageFlags.Ephemeral });
     }
 
@@ -388,11 +403,13 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     if (stopArgChannel.type === ChannelType.GuildVoice || stopArgChannel.type === ChannelType.GuildStageVoice) {
       targetVcId = stopArgChannel.id as string;
     } else {
+      log.warn({ argType: stopArgChannel.type }, "Non-voice channel provided to stop 'channel' option");
       return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
     }
   }
 
   if (!targetVcId) {
+    log.warn("Couldn't resolve a voice channel for stop");
     return interaction.reply({
       content: "Couldn't resolve a voice channel. Run this in the voice channel (or its text channel) or pass the 'channel' option.",
       flags: MessageFlags.Ephemeral,
@@ -403,6 +420,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     orderBy: { startedAt: "desc" },
   });
   if (!active) {
+    log.warn({ channelId: targetVcId }, "No active session found for this channel");
     return interaction.reply({ content: "No active session found for this channel.", flags: MessageFlags.Ephemeral });
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -427,7 +445,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     await prisma.eventSession.updateMany({ where: { id: { in: endIds } }, data: { endedAt: now, status: "ENDED" } });
     for (const id of endIds) stopSessionTracker(id);
   }
-  console.log(`[EventTrack] /event stop by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for group root ${root!.id} -> ended ${endIds.length} session(s)`);
+  log.debug({ userId: interaction.user.id, guildId: guild.id, rootId: root!.id, count: endIds.length }, "event.stop ended sessions");
 
   // Start cleanup watchers for bot-created channels (delete when empty)
   const endedWithMeta = await prisma.eventSession.findMany({ where: { id: { in: endIds } } });
@@ -436,7 +454,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       try {
         startChannelCleanupWatcher(client, s.guildId, s.channelId);
       } catch (e) {
-        console.warn(`[EventTrack] Cleanup watcher failed for channel ${s.channelId}:`, e);
+        log.error({ err: e, channelId: s.channelId }, "Cleanup watcher failed");
       }
     }
   }
@@ -501,16 +519,16 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   // Build name map from DB first (fast), then override with guild display names for the first page
   const userIds = participants.map(p => p.userId);
   if (process.env.EVENT_REVIEW_DEBUG_NAMES === '1') {
-    console.log(`[EventReview] Querying userIds (first 50 of ${userIds.length}):`, userIds.slice(0, 50));
+    log.debug({ firstIds: userIds.slice(0, 50), total: userIds.length }, "EventReview: querying userIds snapshot");
     try {
       const snapshot = await prisma.user.findMany({
         select: { id: true, nickname: true, name: true, username: true },
         take: 50,
         orderBy: { id: 'asc' },
       });
-      console.log(`[EventReview] DB users snapshot (max 50):`, snapshot);
+      log.debug({ snapshot }, "EventReview: DB users snapshot");
     } catch (e) {
-      console.log(`[EventReview] Failed to fetch DB users snapshot:`, e);
+      log.error({ err: e }, "EventReview: failed to fetch DB users snapshot");
     }
   }
   const nameMap = new Map<string, string>();
@@ -520,26 +538,26 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       where: { id: { in: userIds } },
       select: { id: true, nickname: true, name: true, username: true },
     });
-    console.log(`[EventReview] DB name lookup: ${rows.length} rows for ${userIds.length} ids in ${Date.now() - t0}ms`);
-    console.log(`[EventReview] DB rows (stop):`, rows);
+    log.debug({ rows: rows.length, ids: userIds.length, ms: Date.now() - t0 }, "EventReview: DB name lookup");
+    log.debug({ rows }, "EventReview: DB rows (stop)");
     const foundIds = new Set(rows.map(r => r.id));
     const missing = userIds.filter(id => !foundIds.has(id));
     if (missing.length) {
-      console.log(`[EventReview] DB missing ids (${missing.length}):`, missing.slice(0, 10), missing.length > 10 ? '…' : '');
+      log.debug({ missingPreview: missing.slice(0, 10), missingCount: missing.length }, "EventReview: DB missing ids");
     }
     for (const r of rows) {
       const disp = r.nickname || r.name || r.username || r.id;
       nameMap.set(r.id, disp);
     }
     const dbPreview = rows.map(r => [r.id, nameMap.get(r.id)]);
-    console.log(`[EventReview] DB nameMap (stop):`, dbPreview);
+    log.debug({ dbPreview }, "EventReview DB nameMap (stop)");
 
     // Opportunistic backfill for missing users (opt-in via EVENT_REVIEW_BACKFILL=1)
     if (missing.length && process.env.EVENT_REVIEW_BACKFILL === '1') {
       try {
         const tbf = Date.now();
         const fetchedMissing = await guild.members.fetch({ user: missing, withPresences: false });
-        console.log(`[EventReview] Backfill fetch: got ${fetchedMissing.size}/${missing.length} in ${Date.now() - tbf}ms`);
+        log.debug({ fetched: fetchedMissing.size, requested: missing.length, ms: Date.now() - tbf }, "EventReview backfill fetch");
         const upserts: Promise<any>[] = [];
         fetchedMissing.forEach(m => {
           const profile = {
@@ -570,10 +588,10 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         });
         if (upserts.length) {
           await Promise.allSettled(upserts);
-          console.log(`[EventReview] Backfilled ${upserts.length} users into DB`);
+          log.debug({ count: upserts.length }, "EventReview backfilled users into DB");
         }
       } catch (e) {
-        console.warn(`[EventReview] Backfill failed`, e);
+        log.warn({ err: e }, "EventReview backfill failed");
       }
     }
   }
@@ -597,7 +615,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     if (pageIds.length) {
       const t1 = Date.now();
       const fetched = await guild.members.fetch({ user: pageIds, withPresences: false });
-      console.log(`[EventReview] Guild fetch page0: fetched ${fetched.size}/${pageIds.length} in ${Date.now() - t1}ms`);
+      log.debug({ fetched: fetched.size, requested: pageIds.length, ms: Date.now() - t1 }, "EventReview guild fetch page0");
       fetched.forEach(m => {
         nameMap.set(m.id, m.displayName || m.user.username || m.id);
       });
@@ -607,7 +625,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         const uid = p.userId;
         return [uid, nameMap.get(uid)];
       });
-      console.log(`[EventReview] Page 0 labels:`, preview);
+      log.debug({ preview }, "EventReview page 0 labels");
     }
   } catch {
     // ignore fetch errors; placeholders still show DB/cached names

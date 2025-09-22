@@ -28,6 +28,9 @@ build
 dist/
 **/dist/
 
+# Explicitly ignore Arbiter build output
+apps/arbiter/dist/
+
 
 # Debug
 npm-debug.log*
