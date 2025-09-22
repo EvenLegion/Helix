@@ -305,9 +305,36 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         ? ChannelType.GuildStageVoice
         : ChannelType.GuildVoice;
 
+      // Compute default name when none provided: "<root-name>-subN" where N is next available number among siblings
+      let computedName: string | undefined = nameOpt;
+      if (!computedName) {
+        const baseName: string = (rootChan && (rootChan as any).name) ? String((rootChan as any).name) : "Event";
+        const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const suffixRegex = new RegExp(`^${escapeRe(baseName)}-sub(\\d+)$`);
+        let nextIdx = 1;
+        // Limit search to the same parent (category) if available; else scan all voice/stage in guild
+        const candidates = guild.channels.cache.filter(c =>
+          (c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice)
+          && (parentId ? ((c as any).parentId === parentId) : true)
+          && typeof (c as any).name === 'string'
+        );
+        candidates.forEach(c => {
+          const nm = String((c as any).name);
+          const m = nm.match(suffixRegex);
+          if (m && m[1]) {
+            const n = parseInt(m[1], 10);
+            if (!Number.isNaN(n) && n >= nextIdx) nextIdx = n + 1;
+          }
+        });
+        const suffix = `-sub${nextIdx}`;
+        const maxLen = 100; // Discord channel name limit
+        const maxBaseLen = Math.max(1, maxLen - suffix.length);
+        computedName = `${baseName.slice(0, maxBaseLen)}${suffix}`;
+      }
+
       try {
         const created = await guild.channels.create({
-          name: nameOpt || "Event VC",
+          name: computedName!,
           type: newType,
           parent: parentId,
           permissionOverwrites,
