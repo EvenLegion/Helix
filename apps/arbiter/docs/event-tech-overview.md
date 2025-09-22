@@ -2,6 +2,8 @@
 
 Purpose: Provide reviewers a clear map of the code added/changed to support the `/event` commands (start, add-vc, stop), how data flows, and what schema/migrations were introduced.
 
+Last updated: 2025-09-22
+
 ## Components and files
 
 1) Command entrypoint
@@ -14,6 +16,7 @@ Purpose: Provide reviewers a clear map of the code added/changed to support the 
   - add-vc:
     - Finds the "root" session (from context or single active session in guild).
     - Either attaches an existing channel or creates a new one (copies permission overwrites and matches type).
+    - If no explicit channel/name is provided, auto-creates a sibling channel with a "-subN" suffix based on the root channel name.
     - Creates a child `EventSession` with `rootSessionId = <root.id>` and `createdByBot = true` when created.
     - Starts a tracker for the child session.
   - stop:
@@ -41,7 +44,8 @@ Purpose: Provide reviewers a clear map of the code added/changed to support the 
 - `apps/arbiter/src/app/events/interactionCreate/eventReview.ts`
   - Handles button interactions with `customId` prefix `eventrev:`.
   - Supports radio-button style selection, pagination, confirm/cancel.
-  - On confirm, looks up `MeritType` via relation and upserts `Merit` for selected users (existing users only).
+  - On confirm, looks up `MeritType` via relation and upserts/aggregates `Merit` for selected users (existing users only). Uses an upsert keyed by `userID` to increment `merits` by the `MeritType.value`.
+  - After awarding, attempts nickname sync for each awarded user using `syncNicknameAuto` (respects permission limits and supports dev bypass); summarizes outcomes in the confirmation message.
 - `apps/arbiter/src/app/events/interactionCreate/meritTypeAutocomplete.ts`
   - Autocomplete for the `merit_type` option in `/event start` using Prisma ORM.
 
@@ -73,13 +77,21 @@ Purpose: Provide reviewers a clear map of the code added/changed to support the 
   2. Start cleanup watchers for `createdByBot` channels.
   3. Aggregate participants across ended sessions into the root session.
   4. Build review message; reviewer toggles choices and confirms.
-  5. On confirm, upsert `Merit` for selected users based on `MeritType` value.
+  5. On confirm, upsert/aggregate `Merit` for selected users based on `MeritType.value`; then attempt nickname sync and include a summary in the confirmation.
 
 ## Error handling and permissions
 - Channel resolution errors reply ephemerally with guidance.
 - Creating channels requires bot `Manage Channels`; failures show specific hints (handles Discord error code 50013).
 - Review interactions are restricted to the user who initiated the review.
 - Raw SQL is avoided for renamed tables; Prisma ORM is used consistently.
+
+## Recent enhancements (Sep 2025)
+
+- Award description is required in `/event start` and must be at least 5 characters; it is displayed in the review header and echoed back in the confirmation.
+- When creating sub-VCs via `/event add-vc` without an explicit channel/name, the bot auto-creates a channel based on the root name with a `-subN` suffix.
+- Name resolution during review builds a per-page name map prioritized as: DB `nickname/name/username` → guild member displayName → user.username → user ID; the current page is refreshed from the guild to ensure up-to-date display.
+- Post-confirm, nickname sync is attempted for awarded users; outcomes include success, no change, not in guild, or permission-related reasons (with dev bypass support).
+- Structured logging via `@workspace/logger` replaces `console.*` across the feature: debug for normal flow/metrics, warn for guard checks and expected issues, error for failures.
 
 ## Notes for reviewers
 - Speaking-time is approximated; can be swapped for a more precise method if voice receivers are allowed.
