@@ -20,7 +20,7 @@ Start tracking participation for a voice or stage channel.
 Options:
 - `merit_type` (required): Choose what type of merit to award. Autocomplete lets you search by name/description/value.
 - `channel` (optional): Pick a voice/stage channel to track. If omitted, run the command in the target voice channel or in a text channel in the same category.
-- `description` (required): A short note for this event (5–255 chars). When you confirm awards on stop, this becomes the Merit.description for recipients.
+- `description` (required): A short note for this event (5–255 chars). This is saved on the event, echoed in the start reply, shown in the review header (alongside merit type and value), and used as the Merit.description for recipients when you confirm awards on stop.
 
 How to use:
 1) Join the voice/stage channel (or open a text channel under the same category).
@@ -40,6 +40,7 @@ Add or link another voice/stage channel to the current event. Use this when your
 Options:
 - `channel` (optional): An existing voice/stage channel to attach.
 - `name` (optional): If you don’t pick an existing channel, the bot can create a new one with this name under the same category as the main event channel.
+  - If you omit both `channel` and `name`, the bot will auto-create a subchannel named `<root-name>-subN` (e.g., `Ops VC-sub1`, `Ops VC-sub2`). It picks the next available number among siblings, copies permissions from the main channel, and matches the channel type (voice or stage).
 
 How to use:
 1) Run this from the tracked channel (or a text channel in the same category) to auto-target the current event.
@@ -50,6 +51,7 @@ How to use:
 Notes:
 - All added channels are grouped under one “root” event. A single review will cover everyone.
 - When creating a new channel: the bot copies permission overwrites from the first (main) channel and matches channel type (voice vs stage).
+- Auto-naming: When neither `channel` nor `name` is given, the created channel will be named `<root-name>-subN` in the same category (when possible). The name is kept within Discord’s channel name length limit.
 - You can’t add a channel that’s already tracked by a different event.
 - If the bot lacks "Manage Channels", creation will fail—attach an existing channel instead.
 
