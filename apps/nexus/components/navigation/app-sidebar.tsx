@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react';
-import { LogIn } from 'lucide-react';
+import { LogIn, Shield } from 'lucide-react';
 import {
     Sidebar,
     SidebarContent,
@@ -11,19 +11,20 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
 } from "@workspace/ui/components/sidebar";
-import { IconInnerShadowTop } from "@tabler/icons-react";
-import { NavMain } from "@/components/nav-main";
-import { NavUser } from "@/components/nav-user";
+import { NavMain } from "@/components/navigation/nav-main";
+import { NavUser } from "@/components/navigation/nav-user";
+import { NavAdmin } from "@/components/navigation/nav-admin";
 import { authClient } from "@/lib/auth-client";
 import { getMenuItemsByGroup } from "@/lib/menu-config";
 
 const data = {
-    navMain: getMenuItemsByGroup('navMain')
+    navMain: getMenuItemsByGroup('navMain'),
+    navAdmin: getMenuItemsByGroup('navAdmin'),
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-
-    const { data: session, isPending } = authClient.useSession();
+authClient
+    const { data: session, isPending } = .useSession();
 
     const onSignIn = async () => {
         await authClient.signIn.social({
@@ -41,7 +42,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             className="data-[slot=sidebar-menu-button]:!p-1.5"
                             >
                             <a href="#">
-                                <IconInnerShadowTop className="!size-5" />
+                                {/* Replace the icon below with your custom logo/icon */}
                                 <span className="text-base font-semibold">Even Legion</span>
                             </a>
                         </SidebarMenuButton>
@@ -50,6 +51,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={data.navMain} />
+                <NavAdmin items={data.navAdmin} />
             </SidebarContent>
             <SidebarFooter>
                 {isPending ? (

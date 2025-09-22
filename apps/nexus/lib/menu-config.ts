@@ -1,4 +1,4 @@
-import { House, ArrowUpDown  } from 'lucide-react';
+import { House, UserStar, Shield } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 
 export interface MenuItem {
@@ -25,11 +25,16 @@ export const menuItems = {
             icon: House
         },
     ],
-    lgnMain: [
+    navAdmin: [
         {
-            title: 'Sturcture & Divisions',
-            url: '/structure', // TODO: Update URL
-            icon: ArrowUpDown
+            title: 'Dashboard',
+            url: '/admin/dashboard',
+            icon: UserStar
+        },
+        {
+            title: 'Moderation',
+            url: '/admin/moderation',
+            icon: Shield
         }
     ]
 };

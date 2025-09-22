@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "@workspace/ui/styles/globals.css";
 import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar } from "@/components/navigation/app-sidebar";
 import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";

@@ -11,23 +11,11 @@ export const getCurrentUser = async () => {
         headers: await headers(),
     });
 
-    if (!session) {
-        // No session, redirect to Discord OAuth
-        const signInResponse = await auth.api.signInSocial({
-            body: {
-                provider: "discord",
-                callbackURL: "/admin"
-            },
-        });
 
-        if (signInResponse?.url) {
-            redirect(signInResponse.url);
-        }
-    }
 
-    console.log("Session", session);
+
     const currentUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
+        where: { id: session?.user.id },
         include: {
             Member: {
                 include: {
@@ -37,23 +25,8 @@ export const getCurrentUser = async () => {
         }
     });
 
-    if (!currentUser) {
-        // No session, redirect to Discord OAuth
-        const signInResponse = await auth.api.signInSocial({
-            body: {
-                provider: "discord",
-                callbackURL: "/admin"
-            },
-        });
-
-        if (signInResponse?.url) {
-            redirect(signInResponse.url);
-
-        }
-    }
-
     const member = await prisma.member.findFirst({
-        where: { userId: currentUser.id },
+        where: { userId: currentUser?.id },
         include: { organization: true }
     });
 
