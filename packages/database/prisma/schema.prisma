@@ -1,12 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  output   = "./../generated/prisma"
 }
 
 datasource db {
@@ -19,13 +12,14 @@ model User {
   id                 String              @id
   username           String?
   nickname           String?
+  preferredName      String?
   name               String?
   email              String?
   emailVerified      Boolean?
   image              String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  Merit              Merit[]
+  Merit              Merit?
   nameChangeRequests NameChangeRequest[]
   accounts           Account[]
   sessions           Session[]
@@ -105,8 +99,8 @@ model Merit {
   additionalNotes String    @db.VarChar(255)
   awardedBy       String
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
   typeId          Int
+  updatedAt       DateTime  @updatedAt
   meritType       MeritType @relation(fields: [typeId], references: [id])
   user            User      @relation(fields: [userID], references: [id])
 
@@ -121,8 +115,8 @@ model MeritType {
   value         Int
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  merit         Merit[]
   eventSessions EventSession[]
+  merit         Merit[]
 
   @@map("meritType")
   @@schema("arbiter")
@@ -133,9 +127,6 @@ model EventSession {
   id            Int                       @id @default(autoincrement())
   /// If set, this session is part of a group whose root session has this id
   rootSessionId Int?
-  /// Self-relation to group sessions under a single root
-  root          EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
-  children      EventSession[]            @relation("EventSessionGroup")
   guildId       String
   channelId     String
   /// True if the voice/stage channel was created by the bot
@@ -146,6 +137,8 @@ model EventSession {
   status        String                    @default("ACTIVE") @db.VarChar(16)
   meritTypeId   Int?
   meritType     MeritType?                @relation(fields: [meritTypeId], references: [id])
+  root          EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
+  children      EventSession[]            @relation("EventSessionGroup")
   participants  EventSessionParticipant[]
 
   @@index([guildId, channelId, status])
@@ -153,8 +146,6 @@ model EventSession {
   @@map("eventSession")
   @@schema("arbiter")
 }
-
-// Status values: ACTIVE | ENDED
 
 /// Aggregate participation per user for an event session
 model EventSessionParticipant {
@@ -177,10 +168,10 @@ model Event {
   id          Int       @id @default(autoincrement())
   name        String    @db.VarChar(100)
   description String    @db.VarChar(255)
-  eventDate   DateTime
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  eventDate   DateTime
   typeId      Int
+  updatedAt   DateTime  @updatedAt
   eventType   EventType @relation(fields: [typeId], references: [id])
 
   @@map("event")
@@ -196,5 +187,49 @@ model EventType {
   Event       Event[]
 
   @@map("eventType")
+  @@schema("arbiter")
+}
+
+/// Divisions for display and rules
+model Division {
+  id             Int                  @id @default(autoincrement())
+  code           String               @unique
+  name           String
+  kind           String
+  nicknamePrefix String?
+  showRank       Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  memberships    DivisionMembership[]
+
+  @@map("division")
+  @@schema("arbiter")
+}
+
+/// Global cumulative merits required for each level (1..40)
+model RankLevel {
+  level            Int @id
+  cumulativeMerits Int
+
+  @@map("rankLevel")
+  @@schema("arbiter")
+}
+
+/// Per-user diagnostics and tracking for nickname decoration
+model DivisionMembership {
+  id                       Int       @id @default(autoincrement())
+  userID                   String
+  divisionId               Int
+  lastComputedLevel        Int?
+  lastComputedAt           DateTime?
+  lastAppliedNicknameLevel Int?
+  lastNicknameUpdatedAt    DateTime?
+  nicknameSyncStatus       String?
+  notes                    String?
+  division                 Division  @relation(fields: [divisionId], references: [id])
+
+  @@unique([userID, divisionId])
+  @@index([userID])
+  @@map("divisionMembership")
   @@schema("arbiter")
 }

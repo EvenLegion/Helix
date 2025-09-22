@@ -22,3 +22,7 @@ npx commandkit dev
 ## Developer Docs
 
 -   Technical overview for the `/event` feature: see `docs/event-tech-overview.md`.
+
+### Dev mode
+
+-   To allow nickname approvals/sync to succeed without Manage Nicknames in local/dev, see `docs/dev-mode.md`.

@@ -3,6 +3,7 @@ import { prisma } from "@workspace/db";
 import { setSelection, getAllSelections, clearReviewState } from "../../services/reviewStore.ts";
 import { getPageNames, setPageNames, clearNamesForSession } from "../../services/nameCache.ts";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
+import { syncNicknameAuto } from "../../services/rankSync.ts";
 
 export default async function (interaction: Interaction, client: Client) {
   // Only handle component interactions with our customId prefix
@@ -167,6 +168,7 @@ export default async function (interaction: Interaction, client: Client) {
       console.warn(`[EventReview] Skipping ${missing.length} user(s) not found in DB for session ${sessionId}:`, missing);
     }
     const notes = `Awarded via event session ${sessionId}`;
+    const awardedUserIds: string[] = [];
     for (const sel of present) {
       // Upsert on userID to aggregate merits; if you prefer separate rows, use create instead
       await prisma.merit.upsert({
@@ -187,14 +189,42 @@ export default async function (interaction: Interaction, client: Client) {
           typeId: meritType.id,
         },
       });
+      awardedUserIds.push(sel.userId);
     }
+    // Attempt nickname sync for awarded users and gather outcomes
+    const syncSummaries: string[] = [];
+    try {
+      const guild = interaction.guild;
+      if (guild) {
+        for (const uid of awardedUserIds) {
+          try {
+            const res: any = await syncNicknameAuto({ guild, userID: uid });
+            if (res?.reason === 'missing_permissions_bypassed') {
+              syncSummaries.push(`<@${uid}>: dev bypass (no Manage Nicknames/role hierarchy)`);
+            } else if (res?.reason === 'member_not_found') {
+              syncSummaries.push(`<@${uid}>: not in guild`);
+            } else if (res?.reason === 'division_hidden') {
+              // hidden divisions intentionally do not apply nicknames
+            } else if (res?.reason === 'error') {
+              syncSummaries.push(`<@${uid}>: error ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
+            } else if (res && 'applied' in res) {
+              if (res.applied) syncSummaries.push(`<@${uid}>: ${res.before} → ${res.after}`);
+              else syncSummaries.push(`<@${uid}>: no change`);
+            }
+          } catch (e: any) {
+            syncSummaries.push(`<@${uid}>: error ${String(e?.message ?? e)}`);
+          }
+        }
+      }
+    } catch { }
     clearReviewState(`${sessionId}:${reviewerId}`);
     clearNamesForSession(sessionId);
     const summary = present.length
       ? `Awarded ${meritType.value} merit(s) of type "${meritType.name}" to: ${present.map(s => `<@${s.userId}>`).join(', ')}`
       : `No merits awarded.`;
     const skipped = missing.length ? ` Skipped ${missing.length} user(s) not found in database: ${missing.map(id => `<@${id}>`).join(', ')}` : '';
-    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}`, components: [], embeds: [] });
+    const syncNote = syncSummaries.length ? `\nNickname sync: ${syncSummaries.join('; ')}` : '';
+    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${syncNote}`.trim(), components: [], embeds: [] });
   }
 
   if (action === "cancel") {

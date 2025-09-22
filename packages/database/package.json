@@ -13,7 +13,8 @@
     "db:delete-invalid-merits": "node ./scripts/delete-invalid-merits.js",
     "db:find-merits-null-user": "node ./scripts/find-merits-with-null-user.js",
     "db:scan-merits-vs-users": "node ./scripts/scan-merits-vs-users.js",
-    "db:fix-merit-userids-trim": "node ./scripts/fix-merit-userids-trim.js"
+    "db:fix-merit-userids-trim": "node ./scripts/fix-merit-userids-trim.js",
+    "db:seed-ranks-divisions": "node ./scripts/seed-ranks-and-divisions.js"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
