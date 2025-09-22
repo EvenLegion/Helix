@@ -27,3 +27,23 @@ Source: `apps/arbiter/src/app/commands/development/welcomeEmbed.ts`
 Notes:
 - These utilities may assume specific role IDs and channel IDs configured in the code; adjust them before use in production.
 - For any changes to text or logic, edit the corresponding file under `apps/arbiter/src/app/commands/development/`.
+
+## Windows/OneDrive build note — Nexus prebuild cleanup
+
+We added a prebuild step to the Nexus app that removes the `.next` folder before each production build:
+
+- Location: `apps/nexus/package.json`
+- Script: `"prebuild": "rimraf .next"`
+
+Why this exists:
+- On some Windows machines where the repo lives under OneDrive, Next.js occasionally fails with an `EINVAL: invalid argument, readlink` error against `.next/server/chunks`. This is due to OneDrive’s file virtualization and how symlinks/junctions are handled under the `.next` build output.
+- Deleting `.next` prior to each build avoids stale or partially synced artifacts that can trigger the error.
+
+Impact:
+- Clean builds on Windows/OneDrive without manual intervention.
+- Negligible overhead; the folder is recreated on each build anyway.
+
+Alternatives or additional mitigations:
+- Keep the repo outside of OneDrive-backed paths.
+- Manually delete `.next` when the error occurs (the script automates this).
+- Use a separate working directory for builds (e.g., local temp directory) if desired.

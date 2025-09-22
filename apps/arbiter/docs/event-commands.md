@@ -9,7 +9,9 @@ This guide shows moderators and event hosts how to run and manage voice-based ev
 - Clean up bot-created channels after the event ends (when they become empty)
 
 ## Permissions you need
-- You must be able to invoke slash commands in the server.
+- You must be a Centurion to run `/event` commands in production servers.
+  - Admins (with the Administrator permission) are always allowed.
+  - During development, middleware can be bypassed via environment flags.
 - For creating extra voice channels with `/event add-vc` (without picking an existing one), the bot needs "Manage Channels".
 
 ## Commands

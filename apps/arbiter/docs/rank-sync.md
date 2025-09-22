@@ -2,6 +2,10 @@
 
 This guide explains how to recompute and apply rank decorations to member nicknames based on their merits and division.
 
+> Permissions
+> - Only members with the Staff role can run `/rank` commands.
+> - In development mode, this restriction may be bypassed for local testing.
+
 ## What it does
 - Computes the member’s total merits and maps them to a level (1–40) using RankLevel.
 - Chooses which division’s style to display (combat division with showRank = true; otherwise LGN).
@@ -19,6 +23,17 @@ Options:
 
 Autocomplete:
 - The `division` option supports autocomplete by division code and name.
+
+### `/rank sync-all`
+Recompute and apply nicknames for all members in the current guild.
+
+Options:
+- `division` (optional): Division code to apply for everyone (e.g., HLO, VNG, LGN). If omitted, the bot auto-selects per user.
+
+Notes:
+- Progress updates are posted in the ephemeral reply as the sync runs.
+- Bots are skipped. Members the bot cannot manage are counted as "skipped (unmanageable)".
+- A light throttle is applied to avoid rate limits.
 
 ## Nickname rules
 - Base name: uses the user’s `preferredName` from the database. If not set, it falls back to the current nickname/display name and backfills `preferredName` once.

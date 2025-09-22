@@ -2,6 +2,7 @@ import type { ChatInputCommandContext, CommandData } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
 import { syncNicknameAuto, syncNicknameForDivision } from "../../services/rankSync.ts";
+import { forInteraction } from "@workspace/logger";
 
 export const command: CommandData = {
     name: "rank",
@@ -28,15 +29,93 @@ export const command: CommandData = {
                 },
             ],
         },
+        {
+            name: "sync-all",
+            description: "Recompute and apply rank decoration for all members in this guild",
+            type: 1, // subcommand
+            options: [
+                {
+                    name: "division",
+                    description: "Division code to sync in for all users (e.g., HLO, VNG, LGN). If omitted, auto-select per user.",
+                    type: 3, // STRING
+                    required: false,
+                    autocomplete: true,
+                },
+            ],
+        },
     ],
 };
 
 export async function chatInput({ interaction }: ChatInputCommandContext) {
     const sub = interaction.options.getSubcommand();
-    if (sub !== "sync") return;
     if (!interaction.inGuild()) {
         return interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
     }
+    const log = forInteraction(interaction).child({ mod: 'rankSync' });
+    if (sub === "sync-all") {
+        const divisionCode = interaction.options.getString("division", false)?.toUpperCase();
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+            // Ensure member cache populated
+            await interaction.guild!.members.fetch();
+            const members = Array.from(interaction.guild!.members.cache.values());
+            // Optionally skip bots; syncing bots is unnecessary
+            const targets = members.filter(m => !m.user.bot);
+            let processed = 0;
+            let applied = 0;
+            let noChange = 0;
+            let bypass = 0;
+            let errors = 0;
+            let hidden = 0;
+            let notInGuild = 0;
+            let skippedUnmanageable = 0;
+            const updateProgress = async () => {
+                await interaction.editReply(`Syncing${divisionCode ? ` (${divisionCode})` : ''}: ${processed}/${targets.length} — applied:${applied} no-change:${noChange} bypass:${bypass} hidden:${hidden} errors:${errors}`);
+            };
+            await interaction.editReply(`Starting sync for ${targets.length} member(s)...`);
+            for (const m of targets) {
+                // Avoid likely failures quickly when bot cannot manage this member
+                if ((m as any).manageable === false) {
+                    skippedUnmanageable++;
+                    processed++;
+                    if (processed % 25 === 0) await updateProgress();
+                    continue;
+                }
+                try {
+                    let res: any;
+                    if (divisionCode) {
+                        res = await syncNicknameForDivision({ guild: interaction.guild!, userID: m.id, divisionCode });
+                        if (res?.reason === 'division_not_found') { errors++; }
+                        if (res?.reason === 'division_hidden') { hidden++; }
+                        if (res?.reason === 'member_not_found') { notInGuild++; }
+                    } else {
+                        res = await syncNicknameAuto({ guild: interaction.guild!, userID: m.id });
+                        if (res?.reason === 'no_division') { hidden++; }
+                    }
+                    if (res?.reason === 'missing_permissions_bypassed') { bypass++; }
+                    else if (res?.reason === 'error') { errors++; }
+                    else if (res && 'applied' in res) {
+                        if (res.applied) applied++; else noChange++;
+                    } else {
+                        // unknown outcome; count as noChange
+                        noChange++;
+                    }
+                } catch {
+                    errors++;
+                }
+                processed++;
+                // Light throttle to respect rate limits
+                await new Promise(r => setTimeout(r, 200));
+                if (processed % 25 === 0) await updateProgress();
+            }
+            await interaction.editReply(`Sync complete${divisionCode ? ` (${divisionCode})` : ''}: ${processed}/${targets.length} — applied:${applied} no-change:${noChange} bypass:${bypass} hidden:${hidden} errors:${errors}${skippedUnmanageable ? `, skipped (unmanageable):${skippedUnmanageable}` : ''}`);
+        } catch (e) {
+            log.error({ err: e }, 'sync-all failed');
+            return interaction.editReply(`Error: ${String((e as any)?.message ?? e)}`);
+        }
+        return;
+    }
+    if (sub !== "sync") return;
     const userId = interaction.options.getString("user", true);
     const divisionCode = interaction.options.getString("division", false)?.toUpperCase();
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
