@@ -4,9 +4,9 @@ This guide shows moderators and event hosts how to run and manage voice-based ev
 
 ## Overview
 - Track participation in one or more voice/stage channels
-- Group multiple channels into a single event review
+- Group multiple channels into a single event review (sessions are grouped via a root session)
 - Autocomplete merit type selection
-- Clean up bot-created channels after the event ends
+- Clean up bot-created channels after the event ends (when they become empty)
 
 ## Permissions you need
 - You must be able to invoke slash commands in the server.
@@ -46,8 +46,8 @@ How to use:
    - Provide a `name` to create a new channel with copied permissions from the main event channel.
 
 Notes:
-- The bot groups all added channels under one “root” event.
-- The bot copies permission overwrites from the main channel and matches channel type (voice vs stage) when creating a new one.
+- All added channels are grouped under one “root” event. A single review will cover everyone.
+- When creating a new channel: the bot copies permission overwrites from the first (main) channel and matches channel type (voice vs stage).
 - You can’t add a channel that’s already tracked by a different event.
 - If the bot lacks "Manage Channels", creation will fail—attach an existing channel instead.
 
@@ -58,17 +58,17 @@ Options:
 - `channel` (optional): A voice/stage channel belonging to the event you want to stop. If omitted, run the command in/near a channel from the event.
 
 What happens when you stop:
-- All sessions in the event group (main + added channels) are ended together.
-- Participants across all channels are merged into the main session for a single merit review.
-- The review UI opens with participants sorted by presence time.
-- Defaults: Any user present for at least 20% of the event duration is pre-selected for merit.
-- For any bot-created channels, a cleanup watcher starts—when they’re empty, the bot deletes them.
+- All sessions in the event group (main + added channels) end together.
+- Participants across all channels are merged into the root session for a single merit review.
+- The review UI pages through participants and supports “previous/next”, “confirm”, and “cancel”.
+- Default pre-selection: anyone present for ≥ 20% of the event duration is marked to receive merits (you can toggle per user).
+- For any bot-created channels, a cleanup watcher starts—when a channel is empty after stop, the bot deletes it.
 
 ## Tips & troubleshooting
 - “I don’t see the channel I want”: Use the `channel` option explicitly, or run the command from a text channel in the same category.
 - “Bot failed to create a channel”: Make sure the bot role has "Manage Channels". You can still attach an existing channel via the `channel` option.
 - “Multiple events at once”: If more than one event is active in the guild, run `/event add-vc` from a channel that already belongs to the intended event so the bot picks the right group.
-- “Names look odd in review”: The UI prefers stored DB names and overlays guild display names for the first page. It may backfill missing users when enabled by admins.
+- “Names look odd in review”: The UI first uses stored DB names then overlays live guild display names for the current page. Some users may be missing from caches; that’s normal during the first page render.
 
 ## Quick examples
 

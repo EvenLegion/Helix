@@ -18,6 +18,7 @@ npx commandkit dev
 ## Bot How-To
 
 -   Event commands: see `docs/event-commands.md` for a step-by-step guide to `/event start`, `/event add-vc`, and `/event stop`.
+-   Rank sync: see `docs/rank-sync.md` for how `/rank sync` works, formatting rules, and dev-mode outcomes.
 
 ## Developer Docs
 

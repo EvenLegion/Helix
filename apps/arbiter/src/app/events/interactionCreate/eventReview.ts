@@ -206,7 +206,15 @@ export default async function (interaction: Interaction, client: Client) {
             } else if (res?.reason === 'division_hidden') {
               // hidden divisions intentionally do not apply nicknames
             } else if (res?.reason === 'error') {
-              syncSummaries.push(`<@${uid}>: error ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
+              const isMissing = res?.errorCode === 50013 || String(res?.error ?? '').includes('Missing Permissions');
+              if (isMissing) {
+                const detail = res?.permDetail === 'role_hierarchy'
+                  ? 'blocked by role hierarchy'
+                  : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
+                syncSummaries.push(`<@${uid}>: error 50013 ${detail} (set DEV_ALLOW_NICK_EDIT=1 to bypass in dev)`);
+              } else {
+                syncSummaries.push(`<@${uid}>: error ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
+              }
             } else if (res && 'applied' in res) {
               if (res.applied) syncSummaries.push(`<@${uid}>: ${res.before} → ${res.after}`);
               else syncSummaries.push(`<@${uid}>: no change`);

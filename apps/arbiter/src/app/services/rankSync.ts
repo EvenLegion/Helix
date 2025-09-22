@@ -1,5 +1,6 @@
 import { prisma } from "@workspace/db";
 import type { GuildMember } from "discord.js";
+import { PermissionsBitField } from "discord.js";
 
 const CIRCLED: Record<number, string> = {
 	0: "", 1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨",
@@ -130,12 +131,16 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 		const truthy = new Set(['1', 'true', 'yes', 'on']);
 		const DEV_BYPASS = truthy.has(String(process.env.DEV_ALLOW_NICK_EDIT || '').toLowerCase()) || truthy.has(String(process.env.ALLOW_NICK_DEV_APPROVE || '').toLowerCase());
 		const missingPerms = e?.code === 50013 || String(e?.message || '').includes('Missing Permissions');
+		const me = guild?.members?.me;
+		const hasManageNick = !!me?.permissions?.has(PermissionsBitField.Flags.ManageNicknames);
+		const isHierarchy = typeof (member as any)?.manageable === 'boolean' ? !(member as any).manageable : false;
+		const permDetail = isHierarchy ? 'role_hierarchy' : (!hasManageNick ? 'missing_manage_nicknames' : 'missing_permissions');
 		if (DEV_BYPASS && missingPerms) {
 			await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync", notes: "dev_bypass: Missing Permissions; nickname not changed" } });
-			return { applied: false, before, after, reason: "missing_permissions_bypassed" } as const;
+			return { applied: false, before, after, reason: "missing_permissions_bypassed", permDetail } as const;
 		}
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { nicknameSyncStatus: "error", notes: `Set nickname failed: ${e?.code ?? e}` } });
-		return { applied: false, before, after, reason: "error", error: String(e?.message ?? e), errorCode: e?.code } as const;
+		return { applied: false, before, after, reason: "error", error: String(e?.message ?? e), errorCode: e?.code, permDetail: missingPerms ? permDetail : undefined } as const;
 	}
 }
 
@@ -184,11 +189,15 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 		const truthy = new Set(['1', 'true', 'yes', 'on']);
 		const DEV_BYPASS = truthy.has(String(process.env.DEV_ALLOW_NICK_EDIT || '').toLowerCase()) || truthy.has(String(process.env.ALLOW_NICK_DEV_APPROVE || '').toLowerCase());
 		const missingPerms = e?.code === 50013 || String(e?.message || '').includes('Missing Permissions');
+		const me = guild?.members?.me;
+		const hasManageNick = !!me?.permissions?.has(PermissionsBitField.Flags.ManageNicknames);
+		const isHierarchy = typeof (member as any)?.manageable === 'boolean' ? !(member as any).manageable : false;
+		const permDetail = isHierarchy ? 'role_hierarchy' : (!hasManageNick ? 'missing_manage_nicknames' : 'missing_permissions');
 		if (DEV_BYPASS && missingPerms) {
 			await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync", notes: "dev_bypass: Missing Permissions; nickname not changed" } });
-			return { applied: false, before, after, reason: "missing_permissions_bypassed" } as const;
+			return { applied: false, before, after, reason: "missing_permissions_bypassed", permDetail } as const;
 		}
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { nicknameSyncStatus: "error", notes: `Set nickname failed: ${e?.code ?? e}` } });
-		return { applied: false, before, after, reason: "error", error: String(e?.message ?? e), errorCode: e?.code } as const;
+		return { applied: false, before, after, reason: "error", error: String(e?.message ?? e), errorCode: e?.code, permDetail: missingPerms ? permDetail : undefined } as const;
 	}
 }

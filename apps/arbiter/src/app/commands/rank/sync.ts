@@ -60,10 +60,19 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
         }
         if (!res) return interaction.editReply(`No change.`);
         if (res.reason === "missing_permissions_bypassed") {
-            return interaction.editReply(`Approved (dev bypass): would set ${user.tag} to “${res.after}”, but bot lacks Manage Nicknames or role hierarchy in this environment.`);
+            const detail = res?.permDetail === 'role_hierarchy'
+                ? 'blocked by role hierarchy'
+                : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
+            return interaction.editReply(`Approved (dev bypass): would set ${user.tag} to “${res.after}”, but ${detail} in this environment.`);
         }
         if (res.reason === "error") {
-            return interaction.editReply(`Failed to set nickname for ${user.tag} (${user.dis}): ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
+            if (res?.errorCode === 50013 || String(res?.error ?? '').includes('Missing Permissions')) {
+                const detail = res?.permDetail === 'role_hierarchy'
+                    ? 'blocked by role hierarchy'
+                    : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
+                return interaction.editReply(`Failed to set nickname for ${user.tag}: 50013 ${detail}.`);
+            }
+            return interaction.editReply(`Failed to set nickname for ${user.tag}: ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
         }
         if ("before" in res && "after" in res) {
             if (res.applied) return interaction.editReply(`Synced ${user.tag}: ${res.before} → ${res.after}`);
