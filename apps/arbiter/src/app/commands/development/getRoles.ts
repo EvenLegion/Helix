@@ -40,9 +40,9 @@ export async function chatInput({ interaction }: ChatInputCommandContext ) {
 
         // Writing to database
         // Clear existing roles
-        await prisma.DiscordRoles.deleteMany();
+        await prisma.discordRoles.deleteMany();
 
-        const createdRoles = await prisma.DiscordRoles.createMany({
+        const createdRoles = await prisma.discordRoles.createMany({
             data: roles,
         });
 
