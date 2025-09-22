@@ -20,11 +20,13 @@ Start tracking participation for a voice or stage channel.
 Options:
 - `merit_type` (required): Choose what type of merit to award. Autocomplete lets you search by name/description/value.
 - `channel` (optional): Pick a voice/stage channel to track. If omitted, run the command in the target voice channel or in a text channel in the same category.
+- `description` (required): A short note for this event (5–255 chars). When you confirm awards on stop, this becomes the Merit.description for recipients.
 
 How to use:
 1) Join the voice/stage channel (or open a text channel under the same category).
 2) Run `/event start` and select the merit type.
 3) Optionally select a specific channel if you aren’t in/near it.
+4) Provide a meaningful description that will be saved onto the event and applied to awarded merits.
 
 Notes:
 - The bot prevents duplicate active sessions for the same channel.

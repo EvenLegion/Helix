@@ -119,13 +119,16 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 	const after = formatNickname(baseName, division.nicknamePrefix ?? null, level, division.showRank);
 
 	if (before === after) {
+		// Update tracking and persist the nickname into DB for autocomplete/display fallbacks
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
+		await prisma.user.update({ where: { id: userID }, data: { nickname: after } }).catch(() => { });
 		return { applied: false, before, after } as const;
 	}
 
 	try {
 		await member.setNickname(after);
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
+		await prisma.user.update({ where: { id: userID }, data: { nickname: after } }).catch(() => { });
 		return { applied: true, before, after } as const;
 	} catch (e: any) {
 		const truthy = new Set(['1', 'true', 'yes', 'on']);
@@ -178,12 +181,14 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 	const after = formatNickname(baseName, division.nicknamePrefix ?? null, level, division.showRank);
 	if (before === after) {
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
+		await prisma.user.update({ where: { id: userID }, data: { nickname: after } }).catch(() => { });
 		return { applied: false, before, after } as const;
 	}
 
 	try {
 		await member.setNickname(after);
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
+		await prisma.user.update({ where: { id: userID }, data: { nickname: after } }).catch(() => { });
 		return { applied: true, before, after } as const;
 	} catch (e: any) {
 		const truthy = new Set(['1', 'true', 'yes', 'on']);

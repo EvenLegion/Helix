@@ -10,20 +10,34 @@ type BuildArgs = {
   reviewerId: string;
   page: number;
   nameMap?: Map<string, string>;
+  awardDescription?: string;
+  meritTypeName?: string;
+  meritValue?: number;
 };
 
 // With 3 buttons per user row and 1 nav row, we can show up to 4 users per message (Discord allows max 5 rows)
 const PAGE_SIZE = 4;
 
 export function buildEventReviewMessage(args: BuildArgs) {
-  const { sessionId, channelId, sessionSeconds, participants, reviewerId, nameMap } = args;
+  const { sessionId, channelId, sessionSeconds, participants, reviewerId, nameMap, awardDescription, meritTypeName, meritValue } = args;
   const page = Math.max(0, args.page || 0);
   const start = page * PAGE_SIZE;
   const slice = participants.slice(start, start + PAGE_SIZE);
 
+  const descLines: string[] = [];
+  if (awardDescription && awardDescription.trim().length) {
+    descLines.push(`Event: ${awardDescription.trim().slice(0, 255)}`);
+  }
+  if (typeof meritTypeName !== 'undefined') {
+    const valueText = typeof meritValue === 'number' ? ` (+${meritValue})` : '';
+    descLines.push(`Merit: ${meritTypeName}${valueText}`);
+  }
+  descLines.push(`Session length: ${formatDuration(sessionSeconds)}`);
+  descLines.push(`Select Merit/None for each participant. Default Merit if >=20% presence.`);
+
   const embed = new EmbedBuilder()
     .setTitle(`Review session ${sessionId} in <#${channelId}>`)
-    .setDescription(`Session length: ${formatDuration(sessionSeconds)}\nSelect Merit/None for each participant. Default Merit if >=20% presence.`)
+    .setDescription(descLines.join('\n'))
     .setColor(0x4b9cd3);
 
   const rows: Array<ActionRowBuilder<any>> = [];

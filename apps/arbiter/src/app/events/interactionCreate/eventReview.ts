@@ -94,6 +94,7 @@ export default async function (interaction: Interaction, client: Client) {
     const startedAt = session.startedAt ? new Date(session.startedAt).getTime() : Date.now();
     const endedAt = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
     const sessionSeconds = Math.max(1, Math.floor((endedAt - startedAt) / 1000));
+    const mt = session?.meritTypeId ? await prisma.meritType.findUnique({ where: { id: session.meritTypeId! } }) : null;
     const message = buildEventReviewMessage({
       sessionId,
       channelId: session.channelId,
@@ -102,6 +103,9 @@ export default async function (interaction: Interaction, client: Client) {
       page,
       reviewerId,
       nameMap,
+      awardDescription: session.awardDescription ?? undefined,
+      meritTypeName: mt?.name,
+      meritValue: (mt as any)?.value ?? undefined,
     });
     await interaction.update(message as any);
   };
@@ -132,6 +136,7 @@ export default async function (interaction: Interaction, client: Client) {
       return interaction.update({ content: "Session no longer exists.", components: [], embeds: [] });
     }
     let meritType: { id: number; name: string; description: string; value: number } | null = null;
+    let awardDescription: string | undefined;
     // Fetch MeritType via Prisma relation (no raw SQL)
     const sessionWithType = await prisma.eventSession.findUnique({
       where: { id: sessionId },
@@ -144,6 +149,14 @@ export default async function (interaction: Interaction, client: Client) {
         description: sessionWithType.meritType.description,
         value: (sessionWithType.meritType as any).value ?? 0,
       };
+      // Prefer the award description saved on the root session (or this one if root)
+      awardDescription = sessionWithType.awardDescription ?? undefined;
+      if (!awardDescription && sessionWithType.rootSessionId && sessionWithType.rootSessionId !== sessionWithType.id) {
+        try {
+          const root = await prisma.eventSession.findUnique({ where: { id: sessionWithType.rootSessionId } });
+          if (root?.awardDescription) awardDescription = root.awardDescription;
+        } catch { /* ignore */ }
+      }
     }
     if (!meritType) {
       clearReviewState(`${sessionId}:${reviewerId}`);
@@ -175,7 +188,7 @@ export default async function (interaction: Interaction, client: Client) {
         where: { userID: sel.userId },
         update: {
           merits: { increment: meritType.value },
-          description: meritType.description,
+          description: awardDescription || meritType.description,
           additionalNotes: notes,
           awardedBy: reviewerId,
           typeId: meritType.id,
@@ -183,7 +196,7 @@ export default async function (interaction: Interaction, client: Client) {
         create: {
           userID: sel.userId,
           merits: meritType.value,
-          description: meritType.description,
+          description: awardDescription || meritType.description,
           additionalNotes: notes,
           awardedBy: reviewerId,
           typeId: meritType.id,
@@ -232,7 +245,8 @@ export default async function (interaction: Interaction, client: Client) {
       : `No merits awarded.`;
     const skipped = missing.length ? ` Skipped ${missing.length} user(s) not found in database: ${missing.map(id => `<@${id}>`).join(', ')}` : '';
     const syncNote = syncSummaries.length ? `\nNickname sync: ${syncSummaries.join('; ')}` : '';
-    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${syncNote}`.trim(), components: [], embeds: [] });
+    const descLine = awardDescription && awardDescription.trim().length ? `\nEvent: ${awardDescription.trim().slice(0, 255)}` : '';
+    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${descLine}${syncNote}`.trim(), components: [], embeds: [] });
   }
 
   if (action === "cancel") {

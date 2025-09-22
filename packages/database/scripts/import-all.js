@@ -137,9 +137,9 @@ async function main() {
     }
     console.log(`[Import] Event: ${Event.length}`);
 
-    const EventSession = readArray(fp('eventSession'), true);
-    for (const r of EventSession) {
-        const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId };
+        const EventSession = readArray(fp('eventSession'), true);
+        for (const r of EventSession) {
+            const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
         const exists = await prisma.eventSession.findUnique({ where: { id: r.id } });
         if (exists) await prisma.eventSession.update({ where: { id: r.id }, data }); else await prisma.eventSession.create({ data });
     }

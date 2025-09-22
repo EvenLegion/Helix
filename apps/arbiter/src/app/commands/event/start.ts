@@ -24,6 +24,14 @@ export const command: CommandData = {
           autocomplete: true,
         },
         {
+          name: "description",
+          description: "Description to store on the event and use for awarded merits (5–255 chars)",
+          type: 3, // STRING
+          required: true,
+          min_length: 5,
+          max_length: 255,
+        },
+        {
           name: "channel",
           description: "Voice channel to track (optional)",
           type: 7, // CHANNEL
@@ -179,17 +187,23 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       });
     }
 
+    const descOptRaw = interaction.options.getString('description', true) || '';
+    const descOpt = descOptRaw.trim().slice(0, 255);
+    if (descOpt.length < 5) {
+      return interaction.reply({ content: 'Description must be at least 5 characters long.', flags: MessageFlags.Ephemeral });
+    }
     const session = await prisma.eventSession.create({
       data: {
         guildId: guild.id,
         channelId: targetVcId,
         startedBy: interaction.user.id,
         meritTypeId: chosen.id,
+        awardDescription: descOpt,
       },
     });
-    console.log(`[EventTrack] /event start by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for channel ${targetVcId} meritType=${chosen.name} -> session ${session.id}`);
+    console.log(`[EventTrack] /event start by @${interaction.user.tag} (${interaction.user.id}) in guild ${guild.id} for channel ${targetVcId} meritType=${chosen.name} -> session ${session.id} desc=${descOpt ?? '-'}`);
     startSessionTracker(client, session.id, guild.id, targetVcId);
-    return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).`, flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).\nDescription: ${descOpt}`, flags: MessageFlags.Ephemeral });
   }
 
   if (sub === "add-vc") {
@@ -573,6 +587,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   }
 
   const page = 0;
+  const mt = session?.meritTypeId ? await prisma.meritType.findUnique({ where: { id: session!.meritTypeId! } }) : null;
   const message = buildEventReviewMessage({
     sessionId: root!.id,
     channelId: root!.channelId,
@@ -581,6 +596,9 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     page,
     reviewerId: interaction.user.id,
     nameMap,
+    awardDescription: session?.awardDescription ?? undefined,
+    meritTypeName: mt?.name,
+    meritValue: (mt as any)?.value ?? undefined,
   });
   await interaction.editReply(message);
   return;

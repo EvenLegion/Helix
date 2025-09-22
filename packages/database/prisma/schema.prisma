@@ -124,22 +124,24 @@ model MeritType {
 
 /// Event session within a guild voice channel
 model EventSession {
-  id            Int                       @id @default(autoincrement())
+  id               Int                       @id @default(autoincrement())
   /// If set, this session is part of a group whose root session has this id
-  rootSessionId Int?
-  guildId       String
-  channelId     String
+  rootSessionId    Int?
+  guildId          String
+  channelId        String
   /// True if the voice/stage channel was created by the bot
-  createdByBot  Boolean                   @default(false)
-  startedBy     String
-  startedAt     DateTime                  @default(now())
-  endedAt       DateTime?
-  status        String                    @default("ACTIVE") @db.VarChar(16)
-  meritTypeId   Int?
-  meritType     MeritType?                @relation(fields: [meritTypeId], references: [id])
-  root          EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
-  children      EventSession[]            @relation("EventSessionGroup")
-  participants  EventSessionParticipant[]
+  createdByBot     Boolean                   @default(false)
+  startedBy        String
+  startedAt        DateTime                  @default(now())
+  endedAt          DateTime?
+  status           String                    @default("ACTIVE") @db.VarChar(16)
+  meritTypeId      Int?
+  /// Optional custom description to use when awarding merits from this event
+  awardDescription String?                   @db.VarChar(255)
+  meritType        MeritType?                @relation(fields: [meritTypeId], references: [id])
+  root             EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
+  children         EventSession[]            @relation("EventSessionGroup")
+  participants     EventSessionParticipant[]
 
   @@index([guildId, channelId, status])
   @@index([rootSessionId, status])
