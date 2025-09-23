@@ -1,7 +1,9 @@
 import type { ChatInputCommandContext, CommandData } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
-import { syncNicknameAuto, syncNicknameForDivision } from "../../services/rankSync.ts";
+import { previewNicknameAuto, previewNicknameForDivision, syncNicknameAuto, syncNicknameForDivision } from "../../services/rankSync.ts";
+import { setState, makeKey } from "../../services/rankReviewStore.ts";
+import { buildRankReviewMessage } from "../../ui/rankReview.ts";
 import { forInteraction } from "@workspace/logger";
 
 export const command: CommandData = {
@@ -33,15 +35,7 @@ export const command: CommandData = {
             name: "sync-all",
             description: "Recompute and apply rank decoration for all members in this guild",
             type: 1, // subcommand
-            options: [
-                {
-                    name: "division",
-                    description: "Division code to sync in for all users (e.g., HLO, VNG, LGN). If omitted, auto-select per user.",
-                    type: 3, // STRING
-                    required: false,
-                    autocomplete: true,
-                },
-            ],
+            options: [],
         },
     ],
 };
@@ -53,67 +47,32 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     }
     const log = forInteraction(interaction).child({ mod: 'rankSync' });
     if (sub === "sync-all") {
-        const divisionCode = interaction.options.getString("division", false)?.toUpperCase();
+        // Build preview list and present review UI (no immediate apply)
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            // Ensure member cache populated
             await interaction.guild!.members.fetch();
             const members = Array.from(interaction.guild!.members.cache.values());
-            // Optionally skip bots; syncing bots is unnecessary
             const targets = members.filter(m => !m.user.bot);
-            let processed = 0;
-            let applied = 0;
-            let noChange = 0;
-            let bypass = 0;
-            let errors = 0;
-            let hidden = 0;
-            let notInGuild = 0;
-            let skippedUnmanageable = 0;
-            const updateProgress = async () => {
-                await interaction.editReply(`Syncing${divisionCode ? ` (${divisionCode})` : ''}: ${processed}/${targets.length} — applied:${applied} no-change:${noChange} bypass:${bypass} hidden:${hidden} errors:${errors}`);
-            };
-            await interaction.editReply(`Starting sync for ${targets.length} member(s)...`);
+            const previews: { userId: string; displayName: string; before: string; after: string; willChange: boolean }[] = [];
             for (const m of targets) {
-                // Avoid likely failures quickly when bot cannot manage this member
-                if ((m as any).manageable === false) {
-                    skippedUnmanageable++;
-                    processed++;
-                    if (processed % 25 === 0) await updateProgress();
-                    continue;
+                // Skip clearly unmanageable members from preview (can't change anyway)
+                if ((m as any).manageable === false) continue;
+                const pv = await previewNicknameAuto({ guild: interaction.guild!, userID: m.id });
+                if (pv.kind === 'ok') {
+                    previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before: pv.before, after: pv.after, willChange: pv.willChange });
+                } else {
+                    const before = m.nickname || m.displayName || m.user.username;
+                    previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before, after: before, willChange: false });
                 }
-                try {
-                    let res: any;
-                    if (divisionCode) {
-                        res = await syncNicknameForDivision({ guild: interaction.guild!, userID: m.id, divisionCode });
-                        if (res?.reason === 'division_not_found') { errors++; }
-                        if (res?.reason === 'division_hidden') { hidden++; }
-                        if (res?.reason === 'member_not_found') { notInGuild++; }
-                    } else {
-                        res = await syncNicknameAuto({ guild: interaction.guild!, userID: m.id });
-                        if (res?.reason === 'no_division') { hidden++; }
-                    }
-                    if (res?.reason === 'missing_permissions_bypassed') { bypass++; }
-                    else if (res?.reason === 'error') { errors++; }
-                    else if (res && 'applied' in res) {
-                        if (res.applied) applied++; else noChange++;
-                    } else {
-                        // unknown outcome; count as noChange
-                        noChange++;
-                    }
-                } catch {
-                    errors++;
-                }
-                processed++;
-                // Light throttle to respect rate limits
-                await new Promise(r => setTimeout(r, 200));
-                if (processed % 25 === 0) await updateProgress();
             }
-            await interaction.editReply(`Sync complete${divisionCode ? ` (${divisionCode})` : ''}: ${processed}/${targets.length} — applied:${applied} no-change:${noChange} bypass:${bypass} hidden:${hidden} errors:${errors}${skippedUnmanageable ? `, skipped (unmanageable):${skippedUnmanageable}` : ''}`);
+            const scope = makeKey(`bulk_${interaction.id}_${interaction.user.id}`);
+            setState(scope, { entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } });
+            const msg = buildRankReviewMessage({ entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } }, scope, interaction.user.id);
+            return interaction.editReply(msg as any);
         } catch (e) {
-            log.error({ err: e }, 'sync-all failed');
+            log.error({ err: e }, 'sync-all preview failed');
             return interaction.editReply(`Error: ${String((e as any)?.message ?? e)}`);
         }
-        return;
     }
     if (sub !== "sync") return;
     const userId = interaction.options.getString("user", true);
@@ -121,45 +80,32 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
-        let res: any;
-        if (divisionCode) {
-            res = await syncNicknameForDivision({ guild: interaction.guild!, userID: userId!, divisionCode });
-            if (res?.reason === "division_not_found") {
-                return interaction.editReply(`Division ${divisionCode} not found.`);
-            }
-            if (res?.reason === "division_hidden") {
-                return interaction.editReply(`Division ${divisionCode} does not show rank. Nothing to apply.`);
-            }
-            if (res?.reason === "member_not_found") {
-                return interaction.editReply(`User is not in this guild.`);
-            }
-        } else {
-            res = await syncNicknameAuto({ guild: interaction.guild!, userID: userId! });
-            if (res?.reason === "no_division") {
-                return interaction.editReply(`No eligible division found for this user (try specifying LGN or a combat division).`);
-            }
+        // Build preview for single user and show review UI
+        const guild = interaction.guild!;
+        const pv = divisionCode
+            ? await previewNicknameForDivision({ guild, userID: userId!, divisionCode })
+            : await previewNicknameAuto({ guild, userID: userId! });
+        if (pv.kind === 'skip' && pv.reason === 'no_division') {
+            return interaction.editReply(`No eligible division found for this user (try specifying LGN or a combat division).`);
         }
-        if (!res) return interaction.editReply(`No change.`);
-        if (res.reason === "missing_permissions_bypassed") {
-            const detail = res?.permDetail === 'role_hierarchy'
-                ? 'blocked by role hierarchy'
-                : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
-            return interaction.editReply(`Approved (dev bypass): would set <@${userId}> to “${res.after}”, but ${detail} in this environment.`);
+        if (pv.kind === 'skip' && pv.reason === 'division_hidden') {
+            return interaction.editReply(`Selected division does not show rank. Nothing to apply.`);
         }
-        if (res.reason === "error") {
-            if (res?.errorCode === 50013 || String(res?.error ?? '').includes('Missing Permissions')) {
-                const detail = res?.permDetail === 'role_hierarchy'
-                    ? 'blocked by role hierarchy'
-                    : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
-                return interaction.editReply(`Failed to set nickname for <@${userId}>: 50013 ${detail}.`);
-            }
-            return interaction.editReply(`Failed to set nickname for <@${userId}>: ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
+        if (pv.kind === 'skip' && pv.reason === 'member_not_found') {
+            return interaction.editReply(`User is not in this guild.`);
         }
-        if ("before" in res && "after" in res) {
-            if (res.applied) return interaction.editReply(`Synced <@${userId}>: ${res.before} → ${res.after}`);
-            return interaction.editReply(`No change needed for <@${userId}>.`);
+        if (pv.kind === 'error') {
+            return interaction.editReply(`Error: ${pv.message}`);
         }
-        return interaction.editReply(`Done.`);
+        const display = (await guild.members.fetch(userId!).then(m => m.displayName).catch(() => userId!));
+        if (pv.kind !== 'ok') {
+            return interaction.editReply(`No change.`);
+        }
+        const entries = [{ userId: userId!, displayName: display, before: pv.before, after: pv.after, willChange: pv.willChange }];
+        const scope = makeKey(`single_${interaction.id}_${interaction.user.id}`);
+        setState(scope, { entries, meta: { mode: 'single', divisionCode: divisionCode ?? undefined, total: entries.length, page: 0 } });
+        const msg = buildRankReviewMessage({ entries, meta: { mode: 'single', divisionCode: divisionCode ?? undefined, total: entries.length, page: 0 } }, scope, interaction.user.id);
+        return interaction.editReply(msg as any);
     } catch (e) {
         return interaction.editReply(`Error: ${String((e as any)?.message ?? e)}`);
     }
