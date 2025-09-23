@@ -336,11 +336,11 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 		}
 	}
 	log.debug({ preferredName: userRow?.preferredName, baseName }, "baseNameComputed");
-		const before = member.nickname ?? member.displayName;
-		const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
-			? division.nicknamePrefix
-			: `${division.code} | `;
-		const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
+	const before = member.nickname ?? member.displayName;
+	const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
+		? division.nicknamePrefix
+		: `${division.code} | `;
+	const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
 	if (before === after) {
 		log.debug({ before, after }, "noChange");
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
