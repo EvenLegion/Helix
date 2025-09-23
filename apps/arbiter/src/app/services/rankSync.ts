@@ -143,10 +143,12 @@ async function pickDisplayDivision(userID: string) {
 	// Prefer combat with visible rank
 	const combat = memberships.find(m => String(m.division.kind).toLowerCase() === "combat" && m.division.showRank);
 	if (combat) return combat.division;
-	// Otherwise prefer staff for prefix maintenance (may have showRank=false)
-	const staff = memberships.find(m => String(m.division.kind).toLowerCase() === "staff");
-	if (staff) return staff.division;
 	return null;
+}
+
+async function hasStaffMembership(userID: string): Promise<boolean> {
+	const mem = await prisma.divisionMembership.findFirst({ where: { userID, division: { kind: { equals: "staff", mode: "insensitive" } } } });
+	return !!mem;
 }
 
 async function getLGNDivision() {
@@ -159,6 +161,14 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 	// Prefer division from existing membership
 	let division = await pickDisplayDivision(userID);
 	log.debug({ divisionFromMembership: division?.code }, "start");
+	// If no eligible division and user is staff, skip entirely (do not fallback to LGN)
+	if (!division) {
+		const staff = await hasStaffMembership(userID);
+		if (staff) {
+			log.debug({}, "skip:is_staff");
+			return { applied: false, reason: "is_staff" } as const;
+		}
+	}
 	// Fetch member early for parsing and name fallback
 	let member: GuildMember | null = null;
 	try {
@@ -201,9 +211,8 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 	});
 
 	// If division hides rank and is not 'staff', skip (legacy behavior).
-	// For 'staff' divisions, we still apply prefix-only updates.
-	const isStaff = String((division as any)?.kind || '').toLowerCase() === 'staff';
-	if (!division.showRank && !isStaff) {
+	// Skip divisions that do not show rank
+	if (!division.showRank) {
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { nicknameSyncStatus: "in_sync" } });
 		return { applied: false, reason: "division_hidden" } as const;
 	}
@@ -249,7 +258,7 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 	const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
 		? division.nicknamePrefix
 		: `${division.code} | `;
-	const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
+	const after = formatNickname(baseName, divPrefix, level, division.showRank);
 
 	if (before === after) {
 		// Update tracking and persist the nickname into DB for autocomplete/display fallbacks
@@ -290,6 +299,12 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 	const division = await prisma.division.findUnique({ where: { code: divisionCode } });
 	if (!division) return { applied: false, reason: "division_not_found" } as const;
 
+	// Do not sync staff divisions at all
+	if (String((division as any)?.kind || '').toLowerCase() === 'staff') {
+		log.debug({}, "skip:is_staff");
+		return { applied: false, reason: "is_staff" } as const;
+	}
+
 	const { level } = await computeLevelForUser(userID);
 	const membership = await prisma.divisionMembership.upsert({
 		where: { userID_divisionId: { userID, divisionId: division.id } },
@@ -297,9 +312,8 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 		create: { userID, divisionId: division.id, lastComputedLevel: level, lastComputedAt: new Date() },
 	});
 
-	const isStaff = String((division as any)?.kind || '').toLowerCase() === 'staff';
 	log.debug({ divisionKind: (division as any)?.kind, showRank: division.showRank }, "start");
-	if (!division.showRank && !isStaff) {
+	if (!division.showRank) {
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { nicknameSyncStatus: "in_sync" } });
 		return { applied: false, reason: "division_hidden" } as const;
 	}
@@ -340,7 +354,7 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 	const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
 		? division.nicknamePrefix
 		: `${division.code} | `;
-	const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
+	const after = formatNickname(baseName, divPrefix, level, division.showRank);
 	if (before === after) {
 		log.debug({ before, after }, "noChange");
 		await prisma.divisionMembership.update({ where: { id: membership.id }, data: { lastAppliedNicknameLevel: level, lastNicknameUpdatedAt: new Date(), nicknameSyncStatus: "in_sync" } });
@@ -376,7 +390,7 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 // Preview helpers (non-mutating): compute what nickname would be set without applying or writing to DB
 export type NickPreview =
 	| { kind: "ok"; willChange: boolean; before: string; after: string }
-	| { kind: "skip"; reason: "no_division" | "division_hidden" | "member_not_found" }
+	| { kind: "skip"; reason: "no_division" | "division_hidden" | "member_not_found" | "is_staff" }
 	| { kind: "error"; message: string };
 
 export async function previewNicknameAuto(params: { guild: any; userID: string }): Promise<NickPreview> {
@@ -387,8 +401,12 @@ export async function previewNicknameAuto(params: { guild: any; userID: string }
 		let division = await pickDisplayDivision(userID);
 		log.debug({ divisionFromMembership: division?.code }, "start");
 		let member: GuildMember;
-		try { member = await guild.members.fetch(userID); log.debug({ nickname: member.nickname }, "memberFetched"); }
-		catch (e) { log.debug({ error: String((e as any)?.message || e) }, "memberFetchFailed"); return { kind: "skip", reason: "member_not_found" }; }
+		try {
+			member = await guild.members.fetch(userID); log.debug({ nickname: member.nickname }, "memberFetched");
+		}
+		catch (e) {
+			log.debug({ error: String((e as any)?.message || e) }, "memberFetchFailed"); return { kind: "skip", reason: "member_not_found" };
+		}
 		// If no membership-based division, try parsing from DB nickname first, then guild nickname/display
 		if (!division) {
 			const userRowForParse = await prisma.user.findUnique({ where: { id: userID }, select: { nickname: true } });
@@ -396,10 +414,14 @@ export async function previewNicknameAuto(params: { guild: any; userID: string }
 			const parsed = await parseDivisionAndBaseFromNickname(candidate);
 			if (parsed.division) { division = parsed.division as any; log.debug({ candidate, division: parsed.division.code }, "divisionParsedFromNickname"); }
 		}
-		if (!division) division = await getLGNDivision() as any;
+		if (!division) {
+			// If user is staff-only, skip instead of falling back to LGN
+			const staff = await hasStaffMembership(userID);
+			if (staff) return { kind: "skip", reason: "is_staff" };
+			division = await getLGNDivision() as any;
+		}
 		if (!division) return { kind: "skip", reason: "no_division" };
-		const isStaff = String((division as any)?.kind || '').toLowerCase() === 'staff';
-		if (!division.showRank && !isStaff) return { kind: "skip", reason: "division_hidden" };
+		if (!division.showRank) return { kind: "skip", reason: "division_hidden" };
 		const { level } = await computeLevelForUser(userID);
 		const userRow = await prisma.user.findUnique({ where: { id: userID }, select: { preferredName: true, nickname: true } });
 		let baseName = userRow?.preferredName?.trim()?.length ? userRow!.preferredName! : '';
@@ -417,7 +439,7 @@ export async function previewNicknameAuto(params: { guild: any; userID: string }
 		const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
 			? division.nicknamePrefix
 			: `${division.code} | `;
-		const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
+		const after = formatNickname(baseName, divPrefix, level, division.showRank);
 		log.debug({ before, after, willChange: before !== after }, "previewAuto:result");
 		return { kind: "ok", willChange: before !== after, before, after };
 	} catch (e: any) {
@@ -431,8 +453,8 @@ export async function previewNicknameForDivision(params: { guild: any; userID: s
 		const log = childLogger({ mod: "rankSync", func: "previewNicknameForDivision", userID, divisionCode });
 		const division = await prisma.division.findUnique({ where: { code: divisionCode } });
 		if (!division) return { kind: "error", message: `Division ${divisionCode} not found` };
-		const isStaff = String((division as any)?.kind || '').toLowerCase() === 'staff';
-		if (!division.showRank && !isStaff) return { kind: "skip", reason: "division_hidden" };
+		if (String((division as any)?.kind || '').toLowerCase() === 'staff') return { kind: "skip", reason: "is_staff" };
+		if (!division.showRank) return { kind: "skip", reason: "division_hidden" };
 		let member: GuildMember;
 		try { member = await guild.members.fetch(userID); log.debug({ nickname: member.nickname }, "memberFetched"); }
 		catch (e) { log.debug({ error: String((e as any)?.message || e) }, "memberFetchFailed"); return { kind: "skip", reason: "member_not_found" }; }
@@ -455,7 +477,7 @@ export async function previewNicknameForDivision(params: { guild: any; userID: s
 		const divPrefix = (division.nicknamePrefix && division.nicknamePrefix.trim().length)
 			? division.nicknamePrefix
 			: `${division.code} | `;
-		const after = formatNickname(baseName, divPrefix, level, division.showRank && !isStaff ? true : division.showRank);
+		const after = formatNickname(baseName, divPrefix, level, division.showRank);
 		log.debug({ before, after, willChange: before !== after }, "previewForDivision:result");
 		return { kind: "ok", willChange: before !== after, before, after };
 	} catch (e: any) {

@@ -504,7 +504,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   const endedGroup = await prisma.eventSession.findMany({ where: { id: { in: endIds } }, orderBy: { startedAt: "asc" } });
   const startedAtMs = endedGroup.length ? Math.min(...endedGroup.map(s => new Date(s.startedAt).getTime())) : (session?.startedAt ? new Date(session.startedAt).getTime() : Date.now());
   const endedAtMs = endedGroup.length ? Math.max(...endedGroup.map(s => new Date(s.endedAt ?? now).getTime())) : (session?.endedAt ? new Date(session.endedAt).getTime() : Date.now());
-  const sessionSeconds = Math.max(1, Math.floor((endedAtMs - startedAtMs) / 1000));
+  const sessionSeconds = Math.max(1, Math.floor((endedAtMs - startedAtMs) / 1000)); // x1000 for milliseconds
 
   // Initialize review state defaults (merit if presence >= 20% of session)
   const key = getReviewStateKey(root!.id, interaction.user.id);

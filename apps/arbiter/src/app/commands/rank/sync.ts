@@ -54,17 +54,21 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             const members = Array.from(interaction.guild!.members.cache.values());
             const targets = members.filter(m => !m.user.bot);
             const previews: { userId: string; displayName: string; before: string; after: string; willChange: boolean }[] = [];
+            let staffSkipped = 0;
             log.debug({ totalMembers: members.length, nonBotTargets: targets.length }, 'sync-all: building previews');
             for (const m of targets) {
                 const pv = await previewNicknameAuto({ guild: interaction.guild!, userID: m.id });
                 if (pv.kind === 'ok') {
                     previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before: pv.before, after: pv.after, willChange: pv.willChange });
+                } else if (pv.kind === 'skip' && pv.reason === 'is_staff') {
+                    staffSkipped++;
+                    continue; // do not include staff in the review list
                 } else {
                     const before = m.nickname || m.displayName || m.user.username;
                     previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before, after: before, willChange: false });
                 }
             }
-            log.debug({ previewCount: previews.length }, 'sync-all: previews ready');
+            log.debug({ previewCount: previews.length, staffSkipped }, 'sync-all: previews ready');
             const scope = makeKey(`bulk_${interaction.id}_${interaction.user.id}`);
             setState(scope, { entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } });
             const msg = buildRankReviewMessage({ entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } }, scope, interaction.user.id);
@@ -93,6 +97,9 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
         }
         if (pv.kind === 'skip' && pv.reason === 'member_not_found') {
             return interaction.editReply(`User is not in this guild.`);
+        }
+        if (pv.kind === 'skip' && pv.reason === 'is_staff') {
+            return interaction.editReply(`User is in staff. Rank sync is disabled for staff members.`);
         }
         if (pv.kind === 'error') {
             return interaction.editReply(`Error: ${pv.message}`);

@@ -33,6 +33,7 @@ export function buildEventReviewMessage(args: BuildArgs) {
     descLines.push(`Merit: ${meritTypeName}${valueText}`);
   }
   descLines.push(`Session length: ${formatDuration(sessionSeconds)}`);
+  descLines.push(`Per user: P = time present • S = time speaking • % = speaking/present`);
   descLines.push(`Select Merit/None for each participant. Default Merit if >=20% presence.`);
 
   const embed = new EmbedBuilder()
@@ -45,7 +46,10 @@ export function buildEventReviewMessage(args: BuildArgs) {
   for (const p of slice) {
     const uid = p.userId;
     const display = nameMap?.get(uid) ?? uid;
-    const timeText = formatDuration(p.totalSecondsPresent);
+    const presentSecs = Math.max(0, p.totalSecondsPresent || 0);
+    const speakSecs = Math.max(0, p.totalSecondsSpeaking || 0);
+    const pct = presentSecs > 0 ? Math.round((speakSecs / presentSecs) * 100) : 0;
+    const timeText = `P ${formatDuration(presentSecs)} • S ${formatDuration(speakSecs)} (${pct}%)`;
     const safeName = display.length > 40 ? display.slice(0, 37) + '…' : display;
     const nameBtn = new ButtonBuilder()
       .setCustomId(`eventrev:name:${sessionId}:${reviewerId}:${uid}:${page}`)
