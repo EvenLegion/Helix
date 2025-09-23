@@ -54,9 +54,8 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             const members = Array.from(interaction.guild!.members.cache.values());
             const targets = members.filter(m => !m.user.bot);
             const previews: { userId: string; displayName: string; before: string; after: string; willChange: boolean }[] = [];
+            log.debug({ totalMembers: members.length, nonBotTargets: targets.length }, 'sync-all: building previews');
             for (const m of targets) {
-                // Skip clearly unmanageable members from preview (can't change anyway)
-                if ((m as any).manageable === false) continue;
                 const pv = await previewNicknameAuto({ guild: interaction.guild!, userID: m.id });
                 if (pv.kind === 'ok') {
                     previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before: pv.before, after: pv.after, willChange: pv.willChange });
@@ -65,6 +64,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
                     previews.push({ userId: m.id, displayName: m.displayName || m.user.username, before, after: before, willChange: false });
                 }
             }
+            log.debug({ previewCount: previews.length }, 'sync-all: previews ready');
             const scope = makeKey(`bulk_${interaction.id}_${interaction.user.id}`);
             setState(scope, { entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } });
             const msg = buildRankReviewMessage({ entries: previews, meta: { mode: 'bulk', total: previews.length, page: 0 } }, scope, interaction.user.id);
