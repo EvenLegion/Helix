@@ -2,6 +2,7 @@ import { ButtonInteraction, Client, MessageFlags, PermissionsBitField, ActionRow
 import { prisma } from "@workspace/db";
 import { forInteraction as loggerForInteraction } from "@workspace/logger";
 import { stopSessionTracker } from "../../services/sessionTracker";
+import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { upsertReviewState, getReviewStateKey } from "../../services/reviewStore.ts";
@@ -131,7 +132,20 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
     }
     try {
-      await endAndAggregate();
+      const res = await endAndAggregate();
+      // Post follow-up in inactivity thread if available
+      try {
+        const info = getNotifyInfo(res.root.id) || getNotifyInfo(sessionId);
+        if (info?.threadId) {
+          const guild = await interaction.client.guilds.fetch(res.root.guildId);
+          const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
+          if (thread && (thread as any).isTextBased?.()) {
+            await (thread as any).send(`Session ${res.root.id} has been closed with no merits assigned.`);
+            clearNotifyInfo(res.root.id);
+            if (res.root.id !== sessionId) clearNotifyInfo(sessionId);
+          }
+        }
+      } catch { /* ignore follow-up errors */ }
     } catch (e: any) {
       return interaction.update({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
     }
@@ -194,6 +208,17 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       meritTypeName: mt?.name,
       meritValue: (mt as any)?.value ?? undefined,
     });
+    // Post an initial follow-up in thread indicating review started
+    try {
+      const info = getNotifyInfo(root.id) || getNotifyInfo(sessionId);
+      if (info?.threadId) {
+        const guild = await interaction.client.guilds.fetch(root.guildId);
+        const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
+        if (thread && (thread as any).isTextBased?.()) {
+          await (thread as any).send(`Session ${root.id} has been closed. A review has been opened to determine merits.`);
+        }
+      }
+    } catch { /* ignore follow-up errors */ }
     return interaction.update(message as any);
   }
 }

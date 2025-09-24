@@ -1,7 +1,8 @@
 import { ChannelType, VoiceChannel, StageChannel } from "discord.js";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel, PermissionsBitField } from "discord.js";
 import { prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
+import { setNotifyInfo } from "../services/notifyStore";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
@@ -15,11 +16,10 @@ const inactivityWatchers = new Map<number, NodeJS.Timeout>();
 const SAMPLE_SECONDS = 15;
 const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_ENV || "").toLowerCase())
   || String(process.env.EVENT_INACTIVITY_DEV || "").toLowerCase() === "1";
-const DEFAULT_INACTIVITY_MINUTES = IS_DEV ? 1 : 30;
+const DEFAULT_INACTIVITY_MINUTES = IS_DEV ? .5 : 30;
 const INACTIVITY_MINUTES = Number(process.env.EVENT_INACTIVITY_MINUTES || DEFAULT_INACTIVITY_MINUTES);
 const INACTIVITY_MS = INACTIVITY_MINUTES * 60_000;
-const VERBOSE = ["1", "true", "on", "yes"].includes(String(process.env.EVENT_TRACK_VERBOSE || "").toLowerCase());
-// Notification channel name: allow env override; default to 'test' in dev, 'bot-requests' otherwise
+// Notification channel name: allow env override; default to 'commands' in dev, 'bot-requests' otherwise
 const NOTIFY_CHANNEL_NAME = (process.env.EVENT_NOTIFY_CHANNEL && process.env.EVENT_NOTIFY_CHANNEL.trim().length)
   ? process.env.EVENT_NOTIFY_CHANNEL.trim()
   : (IS_DEV ? "commands" : "bot-requests");
@@ -77,6 +77,11 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   log.debug("Preparing inactivity notification");
   const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
   const channel = guild.channels.cache.get(vcId);
+  // Load session details to provide description in messages
+  const session = await prisma.eventSession.findUnique({ where: { id: sessionId } }).catch(() => null as any);
+  const rootId = session?.rootSessionId ?? session?.id ?? sessionId;
+  const awardDesc = String((session as any)?.awardDescription ?? '').replace(/[\r\n]+/g, ' ').trim();
+  const descPart = awardDesc ? ` — ${awardDesc}` : '';
   // Dev-only: resolve specific user (by ID, with username fallback) for DM/mention
   let devMention = "";
   let devIdToPing: string | null = null;
@@ -99,7 +104,7 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   if (admirals) mention += `<@&${admirals.id}> `;
   if (imperators) mention += `<@&${imperators.id}>`;
 
-  const msg = `⚠️ Event session ${sessionId} in <#${vcId}> has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate. ${mention}${devMention}\nrun: /event stop <#${vcId}> to close out the event, or click the button below to close the event.`;
+  const msg = `⚠️ Event session ${sessionId} in <#${vcId}>${descPart} has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate.\nrun: /event stop <#${vcId}> to close out the event, or click the button below to close the event.`;
   const components = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -123,7 +128,7 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
     }
   }
 
-  // Resolve notify channel by ID first, then by name
+  // Resolve notify channel by ID first, then by name (with fallbacks)
   let notifyChan: TextChannel | undefined;
   if (NOTIFY_CHANNEL_ID) {
     notifyChan = (guild.channels.cache.get(NOTIFY_CHANNEL_ID) as TextChannel) || (await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined) as any);
@@ -135,13 +140,122 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
     log.debug({ desiredName, found: !!notifyChan }, "Notify channel resolution by name");
   }
   if (!notifyChan) {
+    const fallbacks = ["bot-requests", "commands", "bot-commands", "bot"]; // try some common names
+    for (const name of fallbacks) {
+      const ch = guild.channels.cache.find((c: any) => c.name === name && c.isTextBased());
+      if (ch) { notifyChan = ch as TextChannel; log.debug({ name }, "Notify channel fallback matched by name"); break; }
+    }
+  }
+  if (!notifyChan) {
     const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
-    log.warn({ desiredName, desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; skipping channel notification");
+    log.warn({ desiredName, desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; skipping channel notification and relying on dev DM if enabled");
     return;
   }
   log.debug({ channelId: notifyChan.id, guildId }, "Sending inactivity notification to configured channel");
-  const sent = await (notifyChan as any).send({ content: msg, components });
+  const sent = await (notifyChan as any).send({ content: msg, components, allowedMentions: { parse: [], repliedUser: false } });
   log.debug({ messageId: (sent as any).id }, "Inactivity notification sent");
+
+  // Try to create a thread for follow-up actions/closure status
+  try {
+    let threadId: string | undefined;
+    let threadObj: any | undefined;
+    const anyMsg = sent as any;
+    // Build a readable thread name: "Stale Event Tracking: <VC Name>"
+    const vc = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+    const vcName = (vc as any)?.name || `vc-${vcId}`;
+    const MAX = 100;
+    let name = `Stale Event Tracking: ${vcName}`;
+    if (name.length > MAX) {
+      name = name.slice(0, MAX);
+    }
+    // Create a thread anchored to the alert message (preferred)
+    // Check permissions to provide clearer diagnostics
+    try {
+      const me = guild.members.me ?? await guild.members.fetch(client.user!.id);
+      const perms = notifyChan.permissionsFor(me!);
+      const canCreatePublic = perms?.has(PermissionsBitField.Flags.CreatePublicThreads) ?? false;
+      const canCreatePrivate = perms?.has(PermissionsBitField.Flags.CreatePrivateThreads) ?? false;
+      const canSendInThreads = perms?.has(PermissionsBitField.Flags.SendMessagesInThreads) ?? false;
+      log.debug({ canCreatePublic, canCreatePrivate, canSendInThreads, channelType: (notifyChan as any).type }, "Thread permissions in notify channel");
+    } catch (e) {
+      log.warn({ err: e }, "Failed to check bot permissions in notify channel");
+    }
+    let threadError: any | undefined;
+    // Attempt channel.threads.create with startMessage to guarantee anchoring
+    try {
+      const created = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, startMessage: anyMsg, type: ChannelType.PublicThread, reason: `Inactivity for session ${rootId}` });
+      threadId = created?.id as string | undefined;
+      threadObj = created;
+      log.debug({ threadId, parentMessageId: anyMsg.id, threadType: created?.type, threadUrl: created?.url }, "Primary thread create (startMessage) succeeded");
+    } catch (e) {
+      threadError = e;
+      log.warn({ err: e }, "channel.threads.create with startMessage failed; trying message.startThread next");
+    }
+    if (!threadObj && typeof anyMsg.startThread === 'function') {
+      try {
+        const thread = await anyMsg.startThread({ name, autoArchiveDuration: 60, reason: `Inactivity for session ${rootId}` });
+        threadId = thread?.id as string | undefined;
+        threadObj = thread;
+        log.debug({ threadId, parentMessageId: anyMsg.id, threadType: (thread as any)?.type, threadUrl: (thread as any)?.url }, "Fallback message.startThread succeeded");
+      } catch (e) {
+        threadError = e;
+        log.warn({ err: e }, "message.startThread failed; will attempt channel.threads.create without startMessage");
+      }
+    } else if (!threadObj) {
+      log.warn("Cannot start thread: message.startThread not available on sent message");
+    }
+    if (!threadObj) {
+      // Fallback to creating a standalone public thread if supported
+      try {
+        const created = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, type: ChannelType.PublicThread, reason: `Inactivity for session ${rootId}` });
+        threadId = created?.id as string | undefined;
+        threadObj = created;
+        log.debug({ threadId, parentMessageId: anyMsg.id, threadType: created?.type, threadUrl: created?.url }, "Fallback channel.threads.create (no startMessage) succeeded");
+      } catch (e) {
+        log.warn({ err: e, prevErr: threadError }, "Both thread creation strategies failed; will try private thread if permissions allow");
+        // Try private thread as a last resort
+        try {
+          const createdPriv = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, reason: `Inactivity for session ${rootId}`, type: ChannelType.PrivateThread });
+          threadId = createdPriv?.id as string | undefined;
+          threadObj = createdPriv;
+          log.debug({ threadId, parentMessageId: anyMsg.id, threadType: createdPriv?.type, threadUrl: createdPriv?.url }, "Private thread creation succeeded");
+        } catch (e2) {
+          log.warn({ err: e2 }, "Private thread creation also failed");
+        }
+      }
+    }
+    // Post leadership ping inside the thread for focused follow-up
+    try {
+      // Only ping leadership roles in the thread; don't @ the dev/user specifically here
+      const pingLine = `${mention}`.trim();
+      const jump = (sent as any)?.url as string | undefined;
+      if (threadObj) {
+        await threadObj.send({
+          content: `${pingLine}${pingLine ? ' — ' : ''}Event session ${rootId} in <#${vcId}>${descPart} has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. ${jump ?? ''}`.trim(),
+          components,
+          allowedMentions: { parse: ['roles'], repliedUser: false },
+        });
+        log.debug({ threadId, threadUrl: (threadObj as any)?.url }, "Posted leadership ping inside thread");
+      } else {
+        // As a fallback when no thread could be created, edit the parent message to include the role ping so leadership is notified
+        const fallbackContent = `${pingLine}${pingLine ? ' — ' : ''}${msg}`;
+        await (anyMsg.edit?.({ content: fallbackContent, components, allowedMentions: { parse: ['roles'], repliedUser: false } }) ?? Promise.resolve());
+        log.warn("Thread not created; edited parent message to include role mention as fallback");
+      }
+    } catch (e) {
+      log.warn({ err: e }, "Failed to send leadership ping to thread");
+    }
+    // Store under child and root ids for robustness (only if a thread was actually created)
+    if (threadId) {
+      setNotifyInfo(sessionId, { channelId: (notifyChan as any).id as string, messageId: (sent as any).id as string, threadId });
+      if (rootId && rootId !== sessionId) setNotifyInfo(rootId, { channelId: (notifyChan as any).id as string, messageId: (sent as any).id as string, threadId });
+      log.debug({ threadId, rootId }, "Inactivity thread created and stored");
+    } else {
+      log.warn({ rootId }, "No threadId present after creation attempts; using parent message fallback only");
+    }
+  } catch (e) {
+    log.warn({ err: e }, "Failed to create or store inactivity thread");
+  }
 }
 
 export async function startSessionTracker(client: any, sessionId: number, guildId: string, vcId: string) {
@@ -286,7 +400,7 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
           log.debug({ left, pretty: leftPretty }, "- left");
         }
       }
-      if (VERBOSE && members.size) {
+      if (members.size) {
         for (const m of members.values()) {
           const v = m.voice;
           const flags = [

@@ -5,6 +5,7 @@ import { getPageNames, setPageNames, clearNamesForSession } from "../../services
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { syncNicknameAuto } from "../../services/rankSync.ts";
 import { forInteraction } from "@workspace/logger";
+import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 
 export default async function (interaction: Interaction, client: Client) {
   // Only handle component interactions with our customId prefix
@@ -249,6 +250,21 @@ export default async function (interaction: Interaction, client: Client) {
     const skipped = missing.length ? ` Skipped ${missing.length} user(s) not found in database: ${missing.map(id => `<@${id}>`).join(', ')}` : '';
     const syncNote = syncSummaries.length ? `\nNickname sync: ${syncSummaries.join('; ')}` : '';
     const descLine = awardDescription && awardDescription.trim().length ? `\nEvent: ${awardDescription.trim().slice(0, 255)}` : '';
+    // Post final follow-up in inactivity thread
+    try {
+      const info = getNotifyInfo(sessionId);
+      if (info?.threadId) {
+        const guildId = interaction.guildId || (await prisma.eventSession.findUnique({ where: { id: sessionId } }))?.guildId;
+        if (guildId) {
+          const guild = await interaction.client.guilds.fetch(guildId);
+          const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
+          if (thread && (thread as any).isTextBased?.()) {
+            await (thread as any).send(`Session ${sessionId} review complete. ${present.length ? 'Merits were awarded.' : 'No merits were awarded.'}`);
+          }
+        }
+        clearNotifyInfo(sessionId);
+      }
+    } catch { /* ignore thread errors */ }
     return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${descLine}${syncNote}`.trim(), components: [], embeds: [] });
   }
 
