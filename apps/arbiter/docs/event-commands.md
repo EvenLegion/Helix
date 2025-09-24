@@ -13,6 +13,7 @@ This guide shows moderators and event hosts how to run and manage voice-based ev
   - Admins (with the Administrator permission) are always allowed.
   - During development, middleware can be bypassed via environment flags.
 - For creating extra voice channels with `/event add-vc` (without picking an existing one), the bot needs "Manage Channels".
+ - Close controls (buttons) can also be used by: Admins, the Centurion role, or the original event creator. These buttons work from DMs too—the bot resolves the guild context behind the scenes.
 
 ## Commands
 
@@ -66,13 +67,32 @@ Options:
 What happens when you stop:
 - All sessions in the event group (main + added channels) end together.
 - Participants across all channels are merged into the root session for a single merit review.
-- The review UI pages through participants and supports “previous/next”, “confirm”, and “cancel”.
+- The review UI pages through participants and supports “previous/next”, “Confirm”, and “Assign no Merits”.
+- Review shows per-user metrics:
+  - Total time present
+  - Total time speaking (approx.)
+  - Participation % (speaking ÷ present)
 - Default pre-selection: anyone present for ≥ 20% of the event duration is marked to receive merits (you can toggle per user).
 - For any bot-created channels, a cleanup watcher starts—when a channel is empty after stop, the bot deletes it.
+
+Close confirmation flow (buttons):
+- When you click a Close button (from the alert or elsewhere), you’ll get a confirmation dialog with:
+  - “Close w/Confirm” — Ends tracking and opens the review UI
+  - “Close w/No Merits” — Ends tracking without awarding any merits
+  - “Cancel” — Does nothing; the event continues
+
+Inactivity alerts and threads:
+- If an event goes inactive for a while (default 30 min; 1 min in dev), the bot posts an alert in the configured notify channel (e.g., #commands or #bot-requests).
+- The bot creates a thread titled: “Stale Event Tracking: <VC Name>”. Inside the thread it pings leadership roles and includes a live “Close Event” button.
+- On close, the bot posts a follow-up in the same thread:
+  - If you chose review, it posts that a review was opened and later that the review completed (with or without merits).
+  - If you chose “No Merits”, it posts that the session was closed with no merits assigned.
+ - Dev mode: the bot also DMs a configured developer user on inactivity (if `EVENT_DEV_NOTIFY_USER_ID` is set).
 
 ## Tips & troubleshooting
 - “I don’t see the channel I want”: Use the `channel` option explicitly, or run the command from a text channel in the same category.
 - “Bot failed to create a channel”: Make sure the bot role has "Manage Channels". You can still attach an existing channel via the `channel` option.
+- “I can’t click the Close button in a thread”: Use the fresh message inside the thread (contains a live button). The grey starter preview can show disabled components.
 - “Multiple events at once”: If more than one event is active in the guild, run `/event add-vc` from a channel that already belongs to the intended event so the bot picks the right group.
 - “Names look odd in review”: The UI first uses stored DB names then overlays live guild display names for the current page. Some users may be missing from caches; that’s normal during the first page render.
 

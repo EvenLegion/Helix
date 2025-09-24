@@ -2,7 +2,7 @@
 
 Purpose: Describe the shared logging approach and how it is used across Arbiter.
 
-Last updated: 2025-09-22
+Last updated: 2025-09-24
 
 ## Package
 
@@ -26,6 +26,10 @@ Last updated: 2025-09-22
 - `debug`: normal flow, decisions, metrics
 - `warn`: guard checks, recoverable or expected-but-not-ideal conditions
 - `error`: exceptions and failures
+
+Notes:
+- Extra ad-hoc gating for debug logs has been removed; rely on LOG_LEVEL to tune verbosity.
+- Session tracker logs thread creation attempts and permission diagnostics: CreatePublicThreads, CreatePrivateThreads, SendMessagesInThreads. Success logs include the thread URL.
 
 ## Environment variables
 

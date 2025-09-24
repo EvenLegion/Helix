@@ -36,9 +36,22 @@ export default async function (interaction: Interaction, client: Client) {
     if (!session) {
       return interaction.update({ content: "Session no longer exists.", components: [], embeds: [] });
     }
-    const participants = await prisma.eventSessionParticipant.findMany({
+    const participantsRaw = await prisma.eventSessionParticipant.findMany({
       where: { eventSessionId: sessionId },
-      orderBy: { totalSecondsPresent: "desc" },
+    });
+    const startedAt = session.startedAt ? new Date(session.startedAt).getTime() : Date.now();
+    const endedAt = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
+    const sessionSeconds = Math.max(1, Math.floor((endedAt - startedAt) / 1000));
+    const participants = participantsRaw.sort((a, b) => {
+      const aP = Math.max(0, a.totalSecondsPresent || 0);
+      const aS = Math.max(0, a.totalSecondsSpeaking || 0);
+      const bP = Math.max(0, b.totalSecondsPresent || 0);
+      const bS = Math.max(0, b.totalSecondsSpeaking || 0);
+      const mode = (require('../../services/eventConfig') as any).getMeritScoreMode?.() ?? 'speaking_over_present';
+      const aPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? aS / sessionSeconds : 0) : (aP > 0 ? aS / aP : 0);
+      const bPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? bS / sessionSeconds : 0) : (bP > 0 ? bS / bP : 0);
+      if (bPct !== aPct) return bPct - aPct;
+      return bP - aP;
     });
     // Build name map via DB for speed
     const nameMap = getPageNames(sessionId, page) ?? new Map<string, string>();
@@ -95,9 +108,7 @@ export default async function (interaction: Interaction, client: Client) {
         }
       }
     }
-    const startedAt = session.startedAt ? new Date(session.startedAt).getTime() : Date.now();
-    const endedAt = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
-    const sessionSeconds = Math.max(1, Math.floor((endedAt - startedAt) / 1000));
+    // sessionSeconds already computed above
     const mt = session?.meritTypeId ? await prisma.meritType.findUnique({ where: { id: session.meritTypeId! } }) : null;
     const message = buildEventReviewMessage({
       sessionId,

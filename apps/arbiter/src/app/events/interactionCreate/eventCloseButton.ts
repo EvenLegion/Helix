@@ -6,6 +6,7 @@ import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { upsertReviewState, getReviewStateKey } from "../../services/reviewStore.ts";
+import { getMeritMinSpeakingPct, getMeritMinPresentPct, getMeritScoreMode } from "../../services/eventConfig";
 
 // Mirror the Centurion requirement used by /event middleware (with admin bypass)
 const CENTURION_ROLE_ID = "1352378365809786970";
@@ -175,8 +176,8 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     } catch (e: any) {
       return interaction.update({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
     }
-    // Participants and review defaults
-    const participants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: root.id }, orderBy: { totalSecondsPresent: "desc" } });
+    // Participants and review defaults (default Merit if speaking % >= threshold)
+    const participants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: root.id } });
     const endedGroup = await prisma.eventSession.findMany({ where: { id: { in: endIds } }, orderBy: { startedAt: "asc" } });
     const nowMs = Date.now();
     const startedAtMs = endedGroup.length ? Math.min(...endedGroup.map((s: any) => new Date(s.startedAt).getTime())) : (root.startedAt ? new Date(root.startedAt).getTime() : nowMs);
@@ -184,15 +185,37 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     const sessionSeconds = Math.max(1, Math.floor((endedAtMs - startedAtMs) / 1000));
     const key = getReviewStateKey(root.id, interaction.user.id);
     const defaults = new Map<string, "merit" | "none">();
+    const thresholdPct = getMeritMinSpeakingPct();
+    const presentMinPct = getMeritMinPresentPct();
+    const mode = getMeritScoreMode();
     for (const p of participants) {
-      const meritDefault = (p.totalSecondsPresent / sessionSeconds) >= 0.2 ? "merit" : "none";
+      const presentSecs = Math.max(0, p.totalSecondsPresent || 0);
+      const speakSecs = Math.max(0, p.totalSecondsSpeaking || 0);
+      const base = mode === 'speaking_over_session' ? sessionSeconds : (presentSecs > 0 ? presentSecs : 0);
+      const pct = base > 0 ? (speakSecs / base) * 100 : 0;
+      const presentPctOfSession = sessionSeconds > 0 ? (presentSecs / sessionSeconds) * 100 : 0;
+      const meets = mode === 'dual_thresholds'
+        ? (pct >= thresholdPct && presentPctOfSession >= presentMinPct)
+        : (pct >= thresholdPct);
+      const meritDefault = meets ? "merit" : "none";
       defaults.set(p.userId, meritDefault);
     }
     upsertReviewState(key, defaults);
+    // Sort participants to match UI ordering (by speaking percent desc, then present time)
+    const participantsSorted = [...participants].sort((a, b) => {
+      const aP = Math.max(0, a.totalSecondsPresent || 0);
+      const aS = Math.max(0, a.totalSecondsSpeaking || 0);
+      const bP = Math.max(0, b.totalSecondsPresent || 0);
+      const bS = Math.max(0, b.totalSecondsSpeaking || 0);
+      const aPct = aP > 0 ? aS / aP : 0;
+      const bPct = bP > 0 ? bS / bP : 0;
+      if (bPct !== aPct) return bPct - aPct;
+      return bP - aP;
+    });
     const mt = root.meritTypeId ? await prisma.meritType.findUnique({ where: { id: root.meritTypeId } }) : null;
     const nameMap = new Map<string, string>();
-    if (participants.length) {
-      const rows = await prisma.user.findMany({ where: { id: { in: participants.map(p => p.userId) } }, select: { id: true, nickname: true, name: true, username: true } });
+    if (participantsSorted.length) {
+      const rows = await prisma.user.findMany({ where: { id: { in: participantsSorted.map(p => p.userId) } }, select: { id: true, nickname: true, name: true, username: true } });
       for (const r of rows) nameMap.set(r.id, r.nickname || r.name || r.username || r.id);
     }
     const page = 0;
@@ -200,7 +223,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       sessionId: root.id,
       channelId: root.channelId,
       sessionSeconds,
-      participants,
+      participants: participantsSorted,
       page,
       reviewerId: interaction.user.id,
       nameMap,
