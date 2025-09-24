@@ -1,21 +1,158 @@
 import { ChannelType, VoiceChannel, StageChannel } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel } from "discord.js";
 import { prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
 const prevMemberNamesBySession = new Map<number, Map<string, string>>();
+const lastActivityBySession = new Map<number, number>();
+const inactivityWatchers = new Map<number, NodeJS.Timeout>();
 
 // Simple sampling approach: every SAMPLE_SECONDS, count present members and increment totals.
 // Speaking detection is non-trivial via discord.js; speaking events require a voice receiver/bot in channel.
 // For now, we approximate speaking as "unmuted and not deafened". Can be replaced with proper audio/speaking integration later.
 const SAMPLE_SECONDS = 15;
+const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_ENV || "").toLowerCase())
+  || String(process.env.EVENT_INACTIVITY_DEV || "").toLowerCase() === "1";
+const DEFAULT_INACTIVITY_MINUTES = IS_DEV ? 1 : 30;
+const INACTIVITY_MINUTES = Number(process.env.EVENT_INACTIVITY_MINUTES || DEFAULT_INACTIVITY_MINUTES);
+const INACTIVITY_MS = INACTIVITY_MINUTES * 60_000;
 const VERBOSE = ["1", "true", "on", "yes"].includes(String(process.env.EVENT_TRACK_VERBOSE || "").toLowerCase());
+// Notification channel name: allow env override; default to 'test' in dev, 'bot-requests' otherwise
+const NOTIFY_CHANNEL_NAME = (process.env.EVENT_NOTIFY_CHANNEL && process.env.EVENT_NOTIFY_CHANNEL.trim().length)
+  ? process.env.EVENT_NOTIFY_CHANNEL.trim()
+  : (IS_DEV ? "test" : "bot-requests");
+const NOTIFY_CHANNEL_ID = (process.env.EVENT_NOTIFY_CHANNEL_ID && process.env.EVENT_NOTIFY_CHANNEL_ID.trim().length)
+  ? process.env.EVENT_NOTIFY_CHANNEL_ID.trim()
+  : undefined;
+import type { Guild, Role, Client } from "discord.js";
+function findRole(guild: Guild, names: string[]): Role | null {
+  for (const name of names) {
+    const role = guild.roles.cache.find((r: Role) => r.name === name);
+    if (role) return role;
+  }
+  return null;
+}
+
+async function notifyInactivity(client: Client, guildId: string, sessionId: number, vcId: string) {
+  const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
+  log.debug("Preparing inactivity notification");
+  const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
+  const channel = guild.channels.cache.get(vcId);
+  // Dev-only: resolve specific user (by ID, with username fallback) for DM/mention
+  let devMention = "";
+  let devIdToPing: string | null = null;
+  if (IS_DEV) {
+    const DEV_ID = "246836773903138817";
+    try {
+      const memberById = await guild.members.fetch(DEV_ID).catch(() => null as any);
+      if (memberById) {
+        devIdToPing = memberById.id;
+        log.debug({ devId: memberById.id }, "Resolved dev user by ID for notification");
+      } else {
+        const memberByName = guild.members.cache.find(m => (m.user?.username?.toLowerCase?.() === "quinoje") || (m.displayName?.toLowerCase?.() === "quinoje"));
+        if (memberByName) {
+          devIdToPing = memberByName.id;
+          log.debug({ devId: memberByName.id }, "Resolved dev user by username for notification");
+        } else {
+          log.warn("Dev user not found by ID or username; will only mention in channel if available");
+        }
+      }
+    } catch (err) {
+      log.warn({ err }, "Error resolving dev user for notification");
+    }
+    // Fallback to raw ID mention even if not in guild cache
+    devMention = ` ${devIdToPing ?? DEV_ID ? `<@${devIdToPing ?? DEV_ID}>` : ""}`;
+  }
+
+  // Resolve leadership roles for mentions
+  const admirals = findRole(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
+  const imperators = findRole(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
+  log.debug({ admiralsId: admirals?.id, imperatorsId: imperators?.id }, "Resolved leadership roles for inactivity mention");
+
+  let mention = "";
+  if (admirals) mention += `<@&${admirals.id}> `;
+  if (imperators) mention += `<@&${imperators.id}>`;
+
+  const msg = `⚠️ Event session ${sessionId} in <#${vcId}> has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate. ${mention}${devMention}\nrun: /event stop <#${vcId}> to close out the event`;
+  const components = [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`event:close:${sessionId}`)
+        .setLabel("Close Event")
+        .setStyle(ButtonStyle.Danger)
+    )
+  ];
+
+  // Dev-only: send the same message as a DM
+  if (IS_DEV) {
+    const fallbackId = "246836773903138817";
+    const targetId = devIdToPing ?? fallbackId;
+    try {
+      const target = await guild.members.fetch(targetId).catch(() => null as any);
+      if (target) {
+        await target.send({ content: msg, components });
+        log.debug({ devId: target.id }, "Inactivity DM sent to dev user");
+      }
+    } catch (e) {
+      log.warn({ err: e }, "Failed to send inactivity DM to dev user");
+    }
+  }
+
+  // Resolve notify channel by ID first, then by name
+  let notifyChan: TextChannel | undefined;
+  if (NOTIFY_CHANNEL_ID) {
+    notifyChan = (guild.channels.cache.get(NOTIFY_CHANNEL_ID) as TextChannel) || (await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined) as any);
+    log.debug({ channelId: NOTIFY_CHANNEL_ID, found: !!notifyChan }, "Notify channel resolution by ID");
+  }
+  if (!notifyChan) {
+    const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+    notifyChan = guild.channels.cache.find((c: any) => c.name === desiredName && c.isTextBased()) as TextChannel | undefined;
+    log.debug({ desiredName, found: !!notifyChan }, "Notify channel resolution by name");
+  }
+  if (!notifyChan) {
+    const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+    log.warn({ desiredName, desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; skipping channel notification");
+    return;
+  }
+  log.debug({ channelId: notifyChan.id, guildId }, "Sending inactivity notification to configured channel");
+  const sent = await (notifyChan as any).send({ content: msg, components });
+  log.debug({ messageId: (sent as any).id }, "Inactivity notification sent");
+}
 
 export async function startSessionTracker(client: any, sessionId: number, guildId: string, vcId: string) {
   // Avoid duplicate trackers per session
   if (activeTimers.has(sessionId)) return;
   const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
+
+  // Load session to identify the creator responsible for the event
+  let creatorId: string | null = null;
+  try {
+    const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
+    creatorId = session?.startedBy || null;
+    log.debug({ creatorId }, "Loaded event session creator");
+  } catch (err) {
+    log.warn({ err }, "Failed to load event session; proceeding without creator enforcement");
+  }
+
+  // Start inactivity watcher
+  lastActivityBySession.set(sessionId, Date.now());
+  if (!inactivityWatchers.has(sessionId)) {
+    const watcher = setInterval(async () => {
+      const last = lastActivityBySession.get(sessionId) || 0;
+      const elapsed = Date.now() - last;
+      log.debug({ last, elapsedMs: elapsed, thresholdMs: INACTIVITY_MS, thresholdMin: INACTIVITY_MINUTES }, "Inactivity check");
+      if (elapsed > INACTIVITY_MS) {
+        log.info("Inactivity threshold reached; notifying leadership");
+        await notifyInactivity(client, guildId, sessionId, vcId);
+        clearInterval(watcher);
+        inactivityWatchers.delete(sessionId);
+      }
+      // VC deletion is handled in tick below
+    }, 60_000);
+    inactivityWatchers.set(sessionId, watcher);
+  }
 
   const tick = async () => {
     try {
@@ -25,6 +162,8 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
         // End session if channel not found
         await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
         log.warn("Channel not found; ending session");
+        log.debug("Channel missing or deleted; sending inactivity/closure notification");
+        await notifyInactivity(client, guildId, sessionId, vcId);
         stopSessionTracker(sessionId);
         return;
       }
@@ -36,6 +175,27 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       // Members currently connected
       const members = vc.members;
       const now = new Date();
+
+      // Determine speaking-like activity and whether creator is present
+      const speakingCandidates = Array.from(members.values()).filter(m => {
+        const v = m.voice;
+        return !(v.selfMute || v.serverMute || v.selfDeaf || v.serverDeaf);
+      });
+      const creatorPresent = !!(creatorId && members.has(creatorId));
+
+      // Update last activity only when someone is potentially speaking AND the creator is present
+      if (speakingCandidates.length > 0 && creatorPresent) {
+        lastActivityBySession.set(sessionId, Date.now());
+        log.debug(
+          { members: members.size, speakingLike: speakingCandidates.length, creatorPresent },
+          "Speaking-like activity with creator present; lastActivity updated"
+        );
+      } else {
+        log.debug(
+          { members: members.size, speakingLike: speakingCandidates.length, creatorPresent },
+          "No speaking-like activity or creator not present; lastActivity NOT updated"
+        );
+      }
 
       // Upsert participants and add SAMPLE_SECONDS to presence time for everyone connected
       for (const [memberId, member] of members) {
@@ -69,11 +229,7 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       // If nobody is connected for multiple consecutive ticks, you may choose to end the session automatically.
       // Skipping auto-end for now; expose a manual /event stop to finalize.
 
-      // Logging to terminal
-      const speakingCandidates = Array.from(members.values()).filter(m => {
-        const v = m.voice;
-        return !(v.selfMute || v.serverMute || v.selfDeaf || v.serverDeaf);
-      });
+      // Logging to terminal (reuse computed speakingCandidates)
 
       const prev = prevMembersBySession.get(sessionId) ?? new Set<string>();
       const prevNames = prevMemberNamesBySession.get(sessionId) ?? new Map<string, string>();
@@ -122,6 +278,7 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
 
     } catch (err) {
       // Stop tracker if session was deleted or serious errors occur
+      const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
       log.error({ err }, "Session tracker error");
     }
   };
@@ -141,5 +298,10 @@ export function stopSessionTracker(sessionId: number) {
     prevMembersBySession.delete(sessionId);
     const log = childLogger({ mod: "eventTrack", sessionId });
     log.debug("Stopped session tracker");
+    if (inactivityWatchers.has(sessionId)) {
+      clearInterval(inactivityWatchers.get(sessionId));
+      inactivityWatchers.delete(sessionId);
+    }
+    lastActivityBySession.delete(sessionId);
   }
 }

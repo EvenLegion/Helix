@@ -6,6 +6,10 @@ function isProd() {
 
 function createTransport() {
     if (isProd()) return undefined;
+    // Allow disabling pretty transport explicitly
+    if (String(process.env.LOG_PRETTY || "1").toLowerCase() in { "0": 1, "false": 1, "no": 1, "off": 1 }) {
+        return undefined;
+    }
     try {
         return pino.transport({
             target: "pino-pretty",
@@ -14,6 +18,8 @@ function createTransport() {
                 translateTime: "SYS:HH:MM:ss.l",
                 singleLine: true,
                 levelFirst: true,
+                // On Windows, force CRLF to avoid odd wrapping in some terminals
+                crlf: process.platform === "win32",
             },
         });
     } catch (_e) {
@@ -21,9 +27,32 @@ function createTransport() {
     }
 }
 
+function createDestination() {
+    // Optional: direct logs to stderr or to a file; can also force sync writes
+    const sync = String(process.env.LOG_SYNC || "").toLowerCase() in { "1": 1, "true": 1, "on": 1, "yes": 1 };
+    const logFile = process.env.LOG_FILE;
+    const dest = process.env.LOG_DEST; // "stdout" | "stderr"
+    if (logFile) {
+        try {
+            return pino.destination({ dest: logFile, mkdir: true, sync });
+        } catch (_e) {
+            // fall through to console
+        }
+    }
+    if ((dest || "").toLowerCase() === "stderr") {
+        return pino.destination({ dest: 2, sync });
+    }
+    if (sync) {
+        return pino.destination({ dest: 1, sync });
+    }
+    return undefined;
+}
+
 function createBaseLogger(bindings) {
     const level = process.env.LOG_LEVEL || (isProd() ? "info" : "debug");
-    const transport = createTransport();
+    // If a destination is configured, prefer that. Otherwise, use pretty transport in non-prod.
+    const destination = createDestination();
+    const transport = destination ? undefined : createTransport();
     return pino(
         {
             level,
@@ -35,7 +64,7 @@ function createBaseLogger(bindings) {
                 },
             },
         },
-        transport
+        destination || transport
     );
 }
 
