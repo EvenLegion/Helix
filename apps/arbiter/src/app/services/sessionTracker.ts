@@ -22,7 +22,7 @@ const VERBOSE = ["1", "true", "on", "yes"].includes(String(process.env.EVENT_TRA
 // Notification channel name: allow env override; default to 'test' in dev, 'bot-requests' otherwise
 const NOTIFY_CHANNEL_NAME = (process.env.EVENT_NOTIFY_CHANNEL && process.env.EVENT_NOTIFY_CHANNEL.trim().length)
   ? process.env.EVENT_NOTIFY_CHANNEL.trim()
-  : (IS_DEV ? "test" : "bot-requests");
+  : (IS_DEV ? "commands" : "bot-requests");
 const NOTIFY_CHANNEL_ID = (process.env.EVENT_NOTIFY_CHANNEL_ID && process.env.EVENT_NOTIFY_CHANNEL_ID.trim().length)
   ? process.env.EVENT_NOTIFY_CHANNEL_ID.trim()
   : undefined;
@@ -35,6 +35,43 @@ function findRole(guild: Guild, names: string[]): Role | null {
   return null;
 }
 
+// Resolve a dev user id for notifications in dev: prefer env, else application owner, else null
+let cachedDevUserId: string | null | undefined;
+async function resolveDevUserId(client: Client): Promise<string | null> {
+  if (typeof cachedDevUserId !== 'undefined') return cachedDevUserId ?? null;
+  const envId = (process.env.EVENT_DEV_NOTIFY_USER_ID || '').trim();
+  if (envId) {
+    cachedDevUserId = envId;
+    return cachedDevUserId ?? null;
+  }
+  try {
+    // Ensure application is fetched to populate owner
+    const app = client.application?.owner ? client.application : await client.application?.fetch();
+    const owner: any = app?.owner as any;
+    if (owner) {
+      // If single-user owner
+      if (owner?.id && typeof owner.id === 'string') {
+        cachedDevUserId = owner.id;
+        return cachedDevUserId ?? null;
+      }
+      // If team owner
+      const teamOwner = owner?.ownerId || owner?.owner?.id;
+      if (teamOwner && typeof teamOwner === 'string') {
+        cachedDevUserId = teamOwner;
+        return cachedDevUserId ?? null;
+      }
+      // Fallback: first team member
+      const firstMemberId = owner?.members?.first?.()?.user?.id;
+      if (firstMemberId) {
+        cachedDevUserId = firstMemberId;
+        return cachedDevUserId ?? null;
+      }
+    }
+  } catch { /* ignore */ }
+  cachedDevUserId = null;
+  return cachedDevUserId;
+}
+
 async function notifyInactivity(client: Client, guildId: string, sessionId: number, vcId: string) {
   const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
   log.debug("Preparing inactivity notification");
@@ -44,26 +81,13 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   let devMention = "";
   let devIdToPing: string | null = null;
   if (IS_DEV) {
-    const DEV_ID = "246836773903138817";
-    try {
-      const memberById = await guild.members.fetch(DEV_ID).catch(() => null as any);
-      if (memberById) {
-        devIdToPing = memberById.id;
-        log.debug({ devId: memberById.id }, "Resolved dev user by ID for notification");
-      } else {
-        const memberByName = guild.members.cache.find(m => (m.user?.username?.toLowerCase?.() === "quinoje") || (m.displayName?.toLowerCase?.() === "quinoje"));
-        if (memberByName) {
-          devIdToPing = memberByName.id;
-          log.debug({ devId: memberByName.id }, "Resolved dev user by username for notification");
-        } else {
-          log.warn("Dev user not found by ID or username; will only mention in channel if available");
-        }
-      }
-    } catch (err) {
-      log.warn({ err }, "Error resolving dev user for notification");
+    devIdToPing = await resolveDevUserId(client);
+    if (devIdToPing) {
+      devMention = ` <@${devIdToPing}>`;
+      log.debug({ devId: devIdToPing }, "Resolved dev user for notification");
+    } else {
+      log.warn("No dev user resolved for dev notification; set EVENT_DEV_NOTIFY_USER_ID to override.");
     }
-    // Fallback to raw ID mention even if not in guild cache
-    devMention = ` ${devIdToPing ?? DEV_ID ? `<@${devIdToPing ?? DEV_ID}>` : ""}`;
   }
 
   // Resolve leadership roles for mentions
@@ -75,7 +99,7 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   if (admirals) mention += `<@&${admirals.id}> `;
   if (imperators) mention += `<@&${imperators.id}>`;
 
-  const msg = `⚠️ Event session ${sessionId} in <#${vcId}> has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate. ${mention}${devMention}\nrun: /event stop <#${vcId}> to close out the event`;
+  const msg = `⚠️ Event session ${sessionId} in <#${vcId}> has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate. ${mention}${devMention}\nrun: /event stop <#${vcId}> to close out the event, or click the button below to close the event.`;
   const components = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -86,9 +110,8 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   ];
 
   // Dev-only: send the same message as a DM
-  if (IS_DEV) {
-    const fallbackId = "246836773903138817";
-    const targetId = devIdToPing ?? fallbackId;
+  if (IS_DEV && devIdToPing) {
+    const targetId = devIdToPing;
     try {
       const target = await guild.members.fetch(targetId).catch(() => null as any);
       if (target) {

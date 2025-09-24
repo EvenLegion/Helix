@@ -18,7 +18,7 @@ export default async function (interaction: Interaction, client: Client) {
   // Formats:
   // eventrev:rb:<sessionId>:<reviewerId>:<userId>:<choice>:<page>
   // eventrev:prev|next:<sessionId>:<reviewerId>:<page>
-  // eventrev:confirm|cancel:<sessionId>:<reviewerId>
+  // eventrev:confirm|nomerits:<sessionId>:<reviewerId>
 
   const action = parts[1];
   const sessionId = Number(parts[2]);
@@ -252,9 +252,9 @@ export default async function (interaction: Interaction, client: Client) {
     return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${descLine}${syncNote}`.trim(), components: [], embeds: [] });
   }
 
-  if (action === "cancel") {
+  if (action === "nomerits") {
     clearReviewState(`${sessionId}:${reviewerId}`);
     clearNamesForSession(sessionId);
-    return interaction.update({ content: `Review cancelled for session ${sessionId}.`, components: [], embeds: [] });
+    return interaction.update({ content: `No merits will be assigned for session ${sessionId}.`, components: [], embeds: [] });
   }
 }

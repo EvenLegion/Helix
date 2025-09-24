@@ -92,8 +92,8 @@ export function buildEventReviewMessage(args: BuildArgs) {
       .setLabel("Confirm")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`eventrev:cancel:${sessionId}:${reviewerId}`)
-      .setLabel("Cancel")
+      .setCustomId(`eventrev:nomerits:${sessionId}:${reviewerId}`)
+      .setLabel("Assign no Merits")
       .setStyle(ButtonStyle.Danger),
   );
   rows.push(nav);
