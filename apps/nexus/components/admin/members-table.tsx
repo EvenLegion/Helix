@@ -14,7 +14,6 @@ export function MembersTable({
 }: {
     members: {
         id: string;
-        email: string;
         role: string;
         joinedAt: string;
     }[];
@@ -25,7 +24,6 @@ export function MembersTable({
             <TableHeader>
                 <TableRow>
                     <TableHead className="w-[100px]">ID</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Joined At</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -35,13 +33,12 @@ export function MembersTable({
                 {members.map((member) => (
                     <TableRow key={member.id}>
                         <TableCell className="font-medium">{member.id}</TableCell>
-                        <TableCell>{member.email}</TableCell>
                         <TableCell>{member.role}</TableCell>
                         <TableCell>{new Date(member.joinedAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
                             {/* Placeholder for action buttons */}
-                            <Button className="m-1">Edit</Button>
-                            <Button className="m-1">Remove</Button>
+                            <Button>Edit</Button>
+                            <Button className="ml-4">Remove</Button>
                         </TableCell>
                     </TableRow>
                 ))}

@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from 'react';
-import { LogIn, Shield } from 'lucide-react';
+import Image from 'next/image';
+
+import { LogIn } from 'lucide-react';
 import {
     Sidebar,
     SidebarContent,
@@ -16,15 +18,13 @@ import { NavUser } from "@/components/navigation/nav-user";
 import { NavAdmin } from "@/components/navigation/nav-admin";
 import { authClient } from "@/lib/auth-client";
 import { getMenuItemsByGroup } from "@/lib/menu-config";
-
 const data = {
     navMain: getMenuItemsByGroup('navMain'),
     navAdmin: getMenuItemsByGroup('navAdmin'),
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-authClient
-    const { data: session, isPending } = .useSession();
+    const { data: session, isPending } = authClient.useSession();
 
     const onSignIn = async () => {
         await authClient.signIn.social({
@@ -42,7 +42,7 @@ authClient
                             className="data-[slot=sidebar-menu-button]:!p-1.5"
                             >
                             <a href="#">
-                                {/* Replace the icon below with your custom logo/icon */}
+                                <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
                                 <span className="text-base font-semibold">Even Legion</span>
                             </a>
                         </SidebarMenuButton>

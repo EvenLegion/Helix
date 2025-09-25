@@ -1,4 +1,4 @@
-import { House, UserStar, Shield } from 'lucide-react';
+import { House, UserStar, Shield, ShieldUser } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 
 export interface MenuItem {
@@ -35,6 +35,11 @@ export const menuItems = {
             title: 'Moderation',
             url: '/admin/moderation',
             icon: Shield
+        },
+        {
+            title: 'Users',
+            url: '/admin/users',
+            icon: ShieldUser
         }
     ]
 };

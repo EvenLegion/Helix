@@ -1,0 +1,53 @@
+"use client";
+
+import { authClient } from "@/lib/auth-client";
+import { Organization } from "@workspace/db";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@workspace/ui/components/select';
+import { toast } from "sonner";
+
+interface ActiveOrgProps {
+    organizations: Organization[];
+}
+
+export default function ActiveOrg({
+    organizations
+}: ActiveOrgProps) {
+    const { data: activeOrg } = authClient.useActiveOrganization();
+
+    const handleOrgChange = async (organizationId: string) => {
+        try {
+            const { error } = await authClient.organization.setActive({
+                organizationId,
+            });
+
+            if (error) {
+                toast.error("Failed to set active organization");
+            }
+            toast.success("Active organization set");
+        } catch {
+            toast.error("Failed to set active organization");
+        }
+    }
+
+    return (
+        <Select onValueChange={handleOrgChange} defaultValue={activeOrg?.id}>
+            <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Active Organization" />
+            </SelectTrigger>
+            <SelectContent>
+                {organizations.map((org) => (
+                    <SelectItem key={org.id} value={org.id}>
+                        {org.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}

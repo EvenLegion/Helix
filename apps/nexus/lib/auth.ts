@@ -3,7 +3,8 @@ import { organization } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
-
+import { ac, staff, admin, member, owner } from "@/lib/auth/permissions";
+import { getActiveOrganization } from "@/server/organizations";
 
 interface Account {
     id: string;
@@ -21,13 +22,25 @@ interface Account {
     password?: string | null;
 }
 
-export const auth: ReturnType<typeof betterAuth> = betterAuth({
+export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
     emailAndPassword: {
         enabled: false,
     },
+    plugins: [
+        organization({
+            ac,
+            roles: {
+                staff,
+                admin,
+                member,
+                owner
+            }
+        }),
+        nextCookies(),
+    ],
     user: {
         additionalFields: {
             username: {
@@ -115,12 +128,21 @@ export const auth: ReturnType<typeof betterAuth> = betterAuth({
                     await updateUserData(account);
                 }
             }
+        },
+        session: {
+            create: {
+                before: async (session) => {
+                    const organization = await getActiveOrganization(session.userId);
+                    return {
+                        data: {
+                            ...session,
+                            activeOrganizationId: organization?.id,
+                        }
+                    }
+                }
+            }
         }
-    },
-    plugins: [
-        nextCookies(),
-        organization()
-    ],
+    }
 });
 
 async function updateUserData(account:Account) {
