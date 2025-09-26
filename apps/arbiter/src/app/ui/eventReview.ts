@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { EventSessionParticipant } from "@workspace/db";
-import { getMeritMinSpeakingPct, getMeritMinPresentPct, getMeritScoreMode } from "../services/eventConfig";
+import { getMeritMinSpeakingPct, getMeritMinPresentPct } from "../services/eventConfig";
 import { getSelection } from "../services/reviewStore";
 
 type BuildArgs = {
@@ -14,24 +14,25 @@ type BuildArgs = {
   awardDescription?: string;
   meritTypeName?: string;
   meritValue?: number;
+  minPercentPresent?: number;
+  minPercentNotMuted?: number;
 };
 
 // With 3 buttons per user row and 1 nav row, we can show up to 4 users per message (Discord allows max 5 rows)
 const PAGE_SIZE = 4;
 
 export function buildEventReviewMessage(args: BuildArgs) {
-  const { sessionId, channelId, sessionSeconds, participants, reviewerId, nameMap, awardDescription, meritTypeName, meritValue } = args;
+  const { sessionId, channelId, sessionSeconds, participants, reviewerId, nameMap, awardDescription, meritTypeName, meritValue, minPercentPresent, minPercentNotMuted } = args;
   const page = Math.max(0, args.page || 0);
   const start = page * PAGE_SIZE;
-  const mode = getMeritScoreMode();
-  // Sort participants by participation percent based on mode, descending
+  // Sort participants by speaking/session percent, descending
   const sorted = [...participants].sort((a, b) => {
     const aP = Math.max(0, a.totalSecondsPresent || 0);
     const aS = Math.max(0, a.totalSecondsSpeaking || 0);
     const bP = Math.max(0, b.totalSecondsPresent || 0);
     const bS = Math.max(0, b.totalSecondsSpeaking || 0);
-    const aPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? aS / sessionSeconds : 0) : (aP > 0 ? aS / aP : 0);
-    const bPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? bS / sessionSeconds : 0) : (bP > 0 ? bS / bP : 0);
+    const aPct = sessionSeconds > 0 ? aS / sessionSeconds : 0;
+    const bPct = sessionSeconds > 0 ? bS / sessionSeconds : 0;
     if (bPct !== aPct) return bPct - aPct;
     // tie-breaker: more present time first
     return bP - aP;
@@ -47,17 +48,13 @@ export function buildEventReviewMessage(args: BuildArgs) {
     descLines.push(`Merit: ${meritTypeName}${valueText}`);
   }
   descLines.push(`Session length: ${formatDuration(sessionSeconds)}`);
-  const thresholdPct = getMeritMinSpeakingPct();
-  const presentMinPct = getMeritMinPresentPct();
-  const scoreLabel = mode === 'speaking_over_session' ? '% = speaking/session' : '% = speaking/present';
-  descLines.push(`Per user: P = time present • S = time speaking • ${scoreLabel}`);
-  if (mode === 'dual_thresholds' && presentMinPct > 0) {
-    descLines.push(`Default Merit if: (speaking% ≥ ${thresholdPct}%) AND (present ≥ ${presentMinPct}% of session).`);
-  } else if (mode === 'speaking_over_session') {
-    descLines.push(`Default Merit if speaking% ≥ ${thresholdPct}% of the entire session.`);
-  } else {
-    descLines.push(`Default Merit if speaking% ≥ ${thresholdPct}% while present.`);
-  }
+  // Use per-type thresholds if provided, else fallback to config
+  const thresholdPct = typeof minPercentNotMuted === 'number' ? minPercentNotMuted : getMeritMinSpeakingPct();
+  const presentMinPct = typeof minPercentPresent === 'number' ? minPercentPresent : getMeritMinPresentPct();
+  descLines.push(`Per user: P = time present • S = time speaking • % = speaking/session`);
+  descLines.push(`Thresholds for this merit type:`);
+  descLines.push(`- Present ≥ ${presentMinPct}% of session`);
+  descLines.push(`- Not muted ≥ ${thresholdPct}% of session`);
 
   const embed = new EmbedBuilder()
     .setTitle(`Review session ${sessionId} in <#${channelId}>`)
@@ -71,8 +68,7 @@ export function buildEventReviewMessage(args: BuildArgs) {
     const display = nameMap?.get(uid) ?? uid;
     const presentSecs = Math.max(0, p.totalSecondsPresent || 0);
     const speakSecs = Math.max(0, p.totalSecondsSpeaking || 0);
-    const pctBase = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? (speakSecs / sessionSeconds) : 0) : (presentSecs > 0 ? (speakSecs / presentSecs) : 0);
-    const pct = Math.round(pctBase * 100);
+    const pct = Math.round((sessionSeconds > 0 ? speakSecs / sessionSeconds : 0) * 100);
     const timeText = `P ${formatDuration(presentSecs)} • S ${formatDuration(speakSecs)} (${pct}%)`;
     const safeName = display.length > 40 ? display.slice(0, 37) + '…' : display;
     const nameBtn = new ButtonBuilder()

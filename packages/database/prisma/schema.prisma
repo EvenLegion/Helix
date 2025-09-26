@@ -109,14 +109,18 @@ model Merit {
 }
 
 model MeritType {
-  id            Int            @id
-  name          String         @db.VarChar(100)
-  description   String         @db.VarChar(255)
-  value         Int
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  eventSessions EventSession[]
-  merit         Merit[]
+  id                 Int            @id
+  name               String         @db.VarChar(100)
+  description        String         @db.VarChar(255)
+  value              Int
+  /// Controls the display order in UIs (lower first). 0 = default.
+  displayIndex       Int            @default(0)
+  minPercentPresent  Int            @default(0) // Minimum % of session present (0-100)
+  minPercentNotMuted Int            @default(0) // Minimum % of session not muted (0-100)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  eventSessions      EventSession[]
+  merit              Merit[]
 
   @@map("meritType")
   @@schema("arbiter")

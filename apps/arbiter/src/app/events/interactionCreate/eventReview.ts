@@ -47,9 +47,8 @@ export default async function (interaction: Interaction, client: Client) {
       const aS = Math.max(0, a.totalSecondsSpeaking || 0);
       const bP = Math.max(0, b.totalSecondsPresent || 0);
       const bS = Math.max(0, b.totalSecondsSpeaking || 0);
-      const mode = (require('../../services/eventConfig') as any).getMeritScoreMode?.() ?? 'speaking_over_present';
-      const aPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? aS / sessionSeconds : 0) : (aP > 0 ? aS / aP : 0);
-      const bPct = mode === 'speaking_over_session' ? (sessionSeconds > 0 ? bS / sessionSeconds : 0) : (bP > 0 ? bS / bP : 0);
+      const aPct = sessionSeconds > 0 ? aS / sessionSeconds : 0;
+      const bPct = sessionSeconds > 0 ? bS / sessionSeconds : 0;
       if (bPct !== aPct) return bPct - aPct;
       return bP - aP;
     });
@@ -121,6 +120,8 @@ export default async function (interaction: Interaction, client: Client) {
       awardDescription: session.awardDescription ?? undefined,
       meritTypeName: mt?.name,
       meritValue: (mt as any)?.value ?? undefined,
+      minPercentPresent: (mt as any)?.minPercentPresent ?? undefined,
+      minPercentNotMuted: (mt as any)?.minPercentNotMuted ?? undefined,
     });
     await interaction.update(message as any);
   };

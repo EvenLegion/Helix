@@ -127,7 +127,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
 
   if (sub === "start") {
     // Load MeritType choices for validation/display
-    const types = await prisma.meritType.findMany({ orderBy: { id: 'asc' } });
+    const types = await prisma.meritType.findMany({ orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
     if (!types.length) {
       log.warn("No MeritType rows found; prompting user to populate");
       return interaction.reply({ content: 'No MeritType entries exist. Please populate MeritType first.', flags: MessageFlags.Ephemeral });

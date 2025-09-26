@@ -6,10 +6,21 @@ import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { upsertReviewState, getReviewStateKey } from "../../services/reviewStore.ts";
-import { getMeritMinSpeakingPct, getMeritMinPresentPct, getMeritScoreMode } from "../../services/eventConfig";
+import { getMeritMinSpeakingPct, getMeritMinPresentPct, getMeritMinPresentPctOverride, getMeritMinSpeakingPctOverride } from "../../services/eventConfig";
 
 // Mirror the Centurion requirement used by /event middleware (with admin bypass)
 const CENTURION_ROLE_ID = "1352378365809786970";
+
+// Helper to resolve a guild role by one of several candidate names
+function findRoleByNames(guild: any, names: string[]) {
+  try {
+    for (const name of names) {
+      const role = guild.roles?.cache?.find((r: any) => r.name === name);
+      if (role) return role;
+    }
+  } catch { }
+  return null;
+}
 
 export default async function (interaction: ButtonInteraction, client: Client) {
   if (!interaction.isButton()) return;
@@ -35,17 +46,21 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       return interaction.reply({ content: `Session ${sessionId} is already ended.`, flags: MessageFlags.Ephemeral });
     }
 
-    // Permission: allow administrators, Centurions, or the event creator (root.startedBy)
-    let isAdmin = false, isCenturion = false, isCreator = false;
+    // Permission: Admin, Centurion, Admiral, Imperator, or the event creator (root.startedBy)
+    let isAdmin = false, isCenturion = false, isAdmiral = false, isImperator = false, isCreator = false;
     try {
       const root = active.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
       const guild = await interaction.client.guilds.fetch(root!.guildId);
       const member = await guild.members.fetch(interaction.user.id);
       isAdmin = member.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
       isCenturion = Boolean(member.roles?.cache?.has?.(CENTURION_ROLE_ID));
+      const admirals = findRoleByNames(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
+      const imperators = findRoleByNames(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
+      isAdmiral = admirals ? Boolean(member.roles?.cache?.has?.(admirals.id)) : false;
+      isImperator = imperators ? Boolean(member.roles?.cache?.has?.(imperators.id)) : false;
       isCreator = root?.startedBy === interaction.user.id;
     } catch { /* leave flags false if fetch fails */ }
-    if (!(isAdmin || isCenturion || isCreator)) {
+    if (!(isAdmin || isCenturion || isAdmiral || isImperator || isCreator)) {
       return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
     }
 
@@ -118,8 +133,8 @@ export default async function (interaction: ButtonInteraction, client: Client) {
   }
 
   if (action === "nomerits") {
-    // Permission: admins, Centurions, or event creator
-    let isAdmin = false, isCenturion = false, isCreator = false;
+    // Permission: Admin, Centurion, Admiral, Imperator, or event creator
+    let isAdmin = false, isCenturion = false, isAdmiral = false, isImperator = false, isCreator = false;
     const active = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     const root = active?.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
     try {
@@ -127,9 +142,13 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       const member = await guild.members.fetch(interaction.user.id);
       isAdmin = member.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
       isCenturion = Boolean(member.roles?.cache?.has?.(CENTURION_ROLE_ID));
+      const admirals = findRoleByNames(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
+      const imperators = findRoleByNames(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
+      isAdmiral = admirals ? Boolean(member.roles?.cache?.has?.(admirals.id)) : false;
+      isImperator = imperators ? Boolean(member.roles?.cache?.has?.(imperators.id)) : false;
       isCreator = root?.startedBy === interaction.user.id;
     } catch { /* leave false */ }
-    if (!(isAdmin || isCenturion || isCreator)) {
+    if (!(isAdmin || isCenturion || isAdmiral || isImperator || isCreator)) {
       return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
     }
     try {
@@ -154,8 +173,8 @@ export default async function (interaction: ButtonInteraction, client: Client) {
   }
 
   if (action === "confirm") {
-    // Permission: admins, Centurions, or event creator
-    let isAdmin = false, isCenturion = false, isCreator = false;
+    // Permission: Admin, Centurion, Admiral, Imperator, or event creator
+    let isAdmin = false, isCenturion = false, isAdmiral = false, isImperator = false, isCreator = false;
     const active = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     const rootForPerm = active?.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
     try {
@@ -163,9 +182,13 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       const member = await guild.members.fetch(interaction.user.id);
       isAdmin = member.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
       isCenturion = Boolean(member.roles?.cache?.has?.(CENTURION_ROLE_ID));
+      const admirals = findRoleByNames(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
+      const imperators = findRoleByNames(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
+      isAdmiral = admirals ? Boolean(member.roles?.cache?.has?.(admirals.id)) : false;
+      isImperator = imperators ? Boolean(member.roles?.cache?.has?.(imperators.id)) : false;
       isCreator = rootForPerm?.startedBy === interaction.user.id;
     } catch { /* leave false */ }
-    if (!(isAdmin || isCenturion || isCreator)) {
+    if (!(isAdmin || isCenturion || isAdmiral || isImperator || isCreator)) {
       return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
     }
     // End and then build review UI
@@ -176,7 +199,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     } catch (e: any) {
       return interaction.update({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
     }
-    // Participants and review defaults (default Merit if speaking % >= threshold)
+    // Participants and review defaults (use per-type thresholds)
     const participants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: root.id } });
     const endedGroup = await prisma.eventSession.findMany({ where: { id: { in: endIds } }, orderBy: { startedAt: "asc" } });
     const nowMs = Date.now();
@@ -185,34 +208,48 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     const sessionSeconds = Math.max(1, Math.floor((endedAtMs - startedAtMs) / 1000));
     const key = getReviewStateKey(root.id, interaction.user.id);
     const defaults = new Map<string, "merit" | "none">();
-    const thresholdPct = getMeritMinSpeakingPct();
-    const presentMinPct = getMeritMinPresentPct();
-    const mode = getMeritScoreMode();
+    // Read per-type thresholds (fallback to config if missing)
+    const mtBrief = root.meritTypeId ? await prisma.meritType.findUnique({ where: { id: root.meritTypeId }, select: { minPercentPresent: true, minPercentNotMuted: true } }) : null;
+    const speakingOverride = getMeritMinSpeakingPctOverride();
+    const presentOverride = getMeritMinPresentPctOverride();
+    const thresholdPct = speakingOverride ?? ((typeof mtBrief?.minPercentNotMuted === 'number') ? mtBrief!.minPercentNotMuted : getMeritMinSpeakingPct());
+    const presentMinPct = presentOverride ?? ((typeof mtBrief?.minPercentPresent === 'number') ? mtBrief!.minPercentPresent : getMeritMinPresentPct());
     for (const p of participants) {
       const presentSecs = Math.max(0, p.totalSecondsPresent || 0);
       const speakSecs = Math.max(0, p.totalSecondsSpeaking || 0);
-      const base = mode === 'speaking_over_session' ? sessionSeconds : (presentSecs > 0 ? presentSecs : 0);
-      const pct = base > 0 ? (speakSecs / base) * 100 : 0;
+      const pct = sessionSeconds > 0 ? (speakSecs / sessionSeconds) * 100 : 0;
       const presentPctOfSession = sessionSeconds > 0 ? (presentSecs / sessionSeconds) * 100 : 0;
-      const meets = mode === 'dual_thresholds'
-        ? (pct >= thresholdPct && presentPctOfSession >= presentMinPct)
-        : (pct >= thresholdPct);
+      const meets = (pct >= thresholdPct) && (presentPctOfSession >= presentMinPct);
       const meritDefault = meets ? "merit" : "none";
       defaults.set(p.userId, meritDefault);
     }
     upsertReviewState(key, defaults);
-    // Sort participants to match UI ordering (by speaking percent desc, then present time)
+    // Sort participants to match UI ordering (by configured percent desc, then present time)
     const participantsSorted = [...participants].sort((a, b) => {
       const aP = Math.max(0, a.totalSecondsPresent || 0);
       const aS = Math.max(0, a.totalSecondsSpeaking || 0);
       const bP = Math.max(0, b.totalSecondsPresent || 0);
       const bS = Math.max(0, b.totalSecondsSpeaking || 0);
-      const aPct = aP > 0 ? aS / aP : 0;
-      const bPct = bP > 0 ? bS / bP : 0;
+      const aPct = sessionSeconds > 0 ? aS / sessionSeconds : 0;
+      const bPct = sessionSeconds > 0 ? bS / sessionSeconds : 0;
       if (bPct !== aPct) return bPct - aPct;
       return bP - aP;
     });
-    const mt = root.meritTypeId ? await prisma.meritType.findUnique({ where: { id: root.meritTypeId } }) : null;
+    const mt = root.meritTypeId ? await prisma.meritType.findUnique({
+      where: { id: root.meritTypeId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        value: true,
+        createdAt: true,
+        updatedAt: true,
+        minPercentPresent: true,
+        minPercentNotMuted: true,
+      },
+    }) : null;
+    const minPercentPresent = mt?.minPercentPresent ?? 0;
+    const minPercentNotMuted = mt?.minPercentNotMuted ?? 0;
     const nameMap = new Map<string, string>();
     if (participantsSorted.length) {
       const rows = await prisma.user.findMany({ where: { id: { in: participantsSorted.map(p => p.userId) } }, select: { id: true, nickname: true, name: true, username: true } });
@@ -230,6 +267,8 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       awardDescription: root.awardDescription ?? undefined,
       meritTypeName: mt?.name,
       meritValue: (mt as any)?.value ?? undefined,
+      minPercentPresent,
+      minPercentNotMuted,
     });
     // Post an initial follow-up in thread indicating review started
     try {

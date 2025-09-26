@@ -133,7 +133,8 @@ Last updated: 2025-09-24
 - EVENT_INACTIVITY_DEV: minutes in development. Default 1.
 - EVENT_NOTIFY_CHANNEL / EVENT_NOTIFY_CHANNEL_ID: where to post alerts.
 - EVENT_DEV_NOTIFY_USER_ID: optional dev user ID to DM in development on inactivity.
-- EVENT_MERIT_SCORE_MODE: scoring mode for review sort/defaults: speaking_over_present | speaking_over_session | dual_thresholds. Default dual_thresholds.
-- EVENT_MERIT_MIN_SPEAKING_PCT: minimum speaking% threshold. Default 20.
-- EVENT_MERIT_MIN_PRESENT_PCT: minimum presence% of session (used in dual_thresholds). Default 5.
+- EVENT_MERIT_MIN_SPEAKING_PCT: default minimum not-muted% of session when a MeritType doesn't specify. Default 20.
+- EVENT_MERIT_MIN_PRESENT_PCT: default minimum present% of session when a MeritType doesn't specify. Default 5.
+- EVENT_MERIT_MIN_SPEAKING_PCT_OVERRIDE: optional testing override to force speaking% threshold globally.
+- EVENT_MERIT_MIN_PRESENT_PCT_OVERRIDE: optional testing override to force present% threshold globally.
 - LOG_LEVEL, NODE_ENV: control logging verbosity and format (see logging overview).

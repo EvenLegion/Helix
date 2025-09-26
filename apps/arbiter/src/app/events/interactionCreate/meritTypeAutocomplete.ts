@@ -12,7 +12,7 @@ export default async function (interaction: Interaction, client: Client) {
   const query = String(focused.value ?? '').toLowerCase().trim();
   log.debug({ query }, 'Autocomplete merit_type query');
   // Fetch up to 25 merit types (Discord limit) and filter by name/description/value
-  const types = await prisma.meritType.findMany({ orderBy: { name: 'asc' }, take: 50 });
+  const types = await prisma.meritType.findMany({ orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }], take: 50 });
   const items = types
     .map(t => ({
       id: t.id,
@@ -24,12 +24,11 @@ export default async function (interaction: Interaction, client: Client) {
       !query ||
       t.name.toLowerCase().includes(query) ||
       t.description.toLowerCase().includes(query) ||
-      String(t.id).includes(query) ||
       String(t.value).includes(query)
     )
     .slice(0, 25)
     .map(t => ({
-      name: `${t.name} (${t.value}) — ${t.description}`.slice(0, 100),
+      name: `${t.name} - ${t.description} (${t.value} merits)`.slice(0, 100),
       value: String(t.id),
     }));
   log.debug({ count: items.length }, 'Autocomplete responding');
