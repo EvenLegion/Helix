@@ -40,31 +40,10 @@ const main = async () => {
             console.warn(`[Fix] Skipping: trimmed id has no matching user => raw="${raw}" -> trimmed="${trimmed}"`);
             continue;
         }
-        const conflict = await prisma.merit.findUnique({ where: { userID: trimmed } });
-        if (conflict) {
-            console.warn(`[Fix] Skipping: a Merit row already exists for trimmed id ${trimmed}.`);
-            continue;
-        }
-
-        console.log(`[Fix] ${DRY_RUN ? 'Would move' : 'Moving'} Merit from "${raw}" -> "${trimmed}"`);
+        console.log(`[Fix] ${DRY_RUN ? 'Would update' : 'Updating'} Merit.userID from "${raw}" -> "${trimmed}"`);
         if (DRY_RUN) continue;
-
-        await prisma.$transaction(async (tx) => {
-            await tx.merit.create({
-                data: {
-                    userID: trimmed,
-                    merits: m.merits,
-                    description: m.description,
-                    additionalNotes: m.additionalNotes,
-                    awardedBy: m.awardedBy,
-                    // createdAt/updatedAt will be regenerated; if you prefer to preserve exact timestamps,
-                    // consider a raw SQL approach in a migration, but we avoid raw SQL here by design.
-                    typeId: m.typeId,
-                },
-            });
-            await tx.merit.delete({ where: { userID: raw } });
-        });
-        fixed++;
+        const res = await prisma.merit.updateMany({ where: { userID: raw }, data: { userID: trimmed } });
+        fixed += res.count;
     }
     console.log(`[Fix] Done. ${fixed}/${candidates.length} moved.`);
 };

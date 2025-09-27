@@ -199,17 +199,9 @@ export default async function (interaction: Interaction, client: Client) {
     const notes = `Awarded via event session ${sessionId}`;
     const awardedUserIds: string[] = [];
     for (const sel of present) {
-      // Upsert on userID to aggregate merits; if you prefer separate rows, use create instead
-      await prisma.merit.upsert({
-        where: { userID: sel.userId },
-        update: {
-          merits: { increment: meritType.value },
-          description: awardDescription || meritType.description,
-          additionalNotes: notes,
-          awardedBy: reviewerId,
-          typeId: meritType.id,
-        },
-        create: {
+      // Always create a new Merit row per award
+      await prisma.merit.create({
+        data: {
           userID: sel.userId,
           merits: meritType.value,
           description: awardDescription || meritType.description,

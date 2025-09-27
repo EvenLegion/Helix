@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+// Use the generated Prisma client from this package to ensure models/types match our schema output
+import { PrismaClient } from '../generated/prisma/index.js'
 import { withAccelerate } from '@prisma/extension-accelerate'
 
 // Env helpers

@@ -131,14 +131,15 @@ async function getLevelFromMerits(merits: number): Promise<number> {
 }
 
 export async function computeLevelForUser(userID: string): Promise<{ level: number; merits: number; }> {
-	const merit = await prisma.merit.findUnique({ where: { userID }, select: { merits: true } });
-	const merits = merit?.merits ?? 0;
+	// Sum merits across all Merit rows for this user
+	const agg = await prisma.merit.aggregate({ _sum: { merits: true }, where: { userID } });
+	const merits = agg._sum.merits ?? 0;
 	return { level: await getLevelFromMerits(merits), merits };
 }
 
 async function pickDisplayDivision(userID: string) {
 	const log = childLogger({ mod: "rankSync", func: "pickDisplayDivision", userID });
-	const memberships = await prisma.divisionMembership.findMany({ where: { userID }, include: { division: true } });
+	const memberships = await prisma.divisionMembership.findMany({ where: { userId: userID }, include: { division: true } });
 	log.debug({ memberships: memberships.map(m => ({ code: m.division.code, kind: m.division.kind, showRank: m.division.showRank })) }, "pickDisplayDivision");
 	// Prefer combat with visible rank
 	const combat = memberships.find(m => String(m.division.kind).toLowerCase() === "combat" && m.division.showRank);
@@ -147,7 +148,7 @@ async function pickDisplayDivision(userID: string) {
 }
 
 async function hasStaffMembership(userID: string): Promise<boolean> {
-	const mem = await prisma.divisionMembership.findFirst({ where: { userID, division: { kind: { equals: "staff", mode: "insensitive" } } } });
+	const mem = await prisma.divisionMembership.findFirst({ where: { userId: userID, division: { kind: { equals: "staff", mode: "insensitive" } } } });
 	return !!mem;
 }
 
@@ -189,9 +190,9 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 					log.debug({ candidate, division: parsed.division.code }, "divisionParsedFromNickname");
 					// Backfill a DivisionMembership if missing
 					try {
-						const existing = await prisma.divisionMembership.findFirst({ where: { userID, divisionId: parsed.division.id } });
+						const existing = await prisma.divisionMembership.findFirst({ where: { userId: userID, divisionId: parsed.division.id } });
 						if (!existing) {
-							await prisma.divisionMembership.create({ data: { userID, divisionId: parsed.division.id, lastComputedAt: new Date() } });
+							await prisma.divisionMembership.create({ data: { userId: userID, divisionId: parsed.division.id, lastComputedAt: new Date() } });
 						}
 					} catch { /* ignore */ }
 				}
@@ -205,9 +206,9 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 
 	const { level } = await computeLevelForUser(userID);
 	const membership = await prisma.divisionMembership.upsert({
-		where: { userID_divisionId: { userID, divisionId: division.id } },
+		where: { userId_divisionId: { userId: userID, divisionId: division.id } },
 		update: { lastComputedLevel: level, lastComputedAt: new Date() },
-		create: { userID, divisionId: division.id, lastComputedLevel: level, lastComputedAt: new Date() },
+		create: { userId: userID, divisionId: division.id, lastComputedLevel: level, lastComputedAt: new Date() },
 	});
 
 	// If division hides rank and is not 'staff', skip (legacy behavior).
@@ -307,9 +308,9 @@ export async function syncNicknameForDivision(params: { guild: any; userID: stri
 
 	const { level } = await computeLevelForUser(userID);
 	const membership = await prisma.divisionMembership.upsert({
-		where: { userID_divisionId: { userID, divisionId: division.id } },
+		where: { userId_divisionId: { userId: userID, divisionId: division.id } },
 		update: { lastComputedLevel: level, lastComputedAt: new Date() },
-		create: { userID, divisionId: division.id, lastComputedLevel: level, lastComputedAt: new Date() },
+		create: { userId: userID, divisionId: division.id, lastComputedLevel: level, lastComputedAt: new Date() },
 	});
 
 	log.debug({ divisionKind: (division as any)?.kind, showRank: division.showRank }, "start");

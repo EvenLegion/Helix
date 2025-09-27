@@ -3,7 +3,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PrismaClient } from '@prisma/client';
+// Use the generated Prisma Client local to this package to ensure it matches the current schema (ESM explicit path)
+import { PrismaClient } from '../generated/prisma/index.js';
 
 const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);

@@ -90,7 +90,8 @@ model NameChangeRequest {
 }
 
 model Merit {
-  userID          String    @id @db.VarChar(19)
+  id              Int       @id @default(autoincrement())
+  userID          String    @db.VarChar(19)
   merits          Int
   description     String    @db.VarChar(255)
   additionalNotes String    @db.VarChar(255)
@@ -101,6 +102,7 @@ model Merit {
   meritType       MeritType @relation(fields: [typeId], references: [id])
   user            User      @relation(fields: [userID], references: [id])
 
+  @@index([userID])
   @@map("merit")
   @@schema("arbiter")
 }
@@ -221,7 +223,7 @@ model RankLevel {
 /// Per-user diagnostics and tracking for nickname decoration
 model DivisionMembership {
   id                       Int       @id @default(autoincrement())
-  userID                   String
+  userId                   String    @db.VarChar(19)
   divisionId               Int
   lastComputedLevel        Int?
   lastComputedAt           DateTime?
@@ -231,15 +233,15 @@ model DivisionMembership {
   notes                    String?
   division                 Division  @relation(fields: [divisionId], references: [id])
 
-  @@unique([userID, divisionId])
-  @@index([userID])
+  @@unique([userId, divisionId])
+  @@index([userId])
   @@map("divisionMembership")
   @@schema("arbiter")
 }
 
 model DiscordRoles {
   id          Int      @id @default(autoincrement())
-  role_id     String
+  roleId      String
   name        String
   color       String
   permissions String

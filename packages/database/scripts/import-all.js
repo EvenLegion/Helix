@@ -53,6 +53,7 @@ function resolveBackupDir(arg) {
 }
 
 async function main() {
+    const REMAP_PARENTS = ['1', 'true', 'yes'].includes(String(process.env.IMPORT_REMAP_PARENTS || '').toLowerCase());
     const dirArg = process.argv[2];
     if (!dirArg) {
         console.error('Usage: node import-all.js <backup-folder | YYYYMMDD-HHMMSS | latest>');
@@ -68,7 +69,7 @@ async function main() {
         process.exit(1);
     }
     const stamp = path.basename(dir);
-    console.log('[Import] Starting full import from', dir, `(stamp: ${stamp})`);
+    console.log('[Import] Starting full import from', dir, `(stamp: ${stamp})`, REMAP_PARENTS ? '[mode: remap-parents]' : '');
 
     const fp = (name) => path.join(dir, `${name}.json`);
 
@@ -107,20 +108,47 @@ async function main() {
 
     // Dependents
     const DivisionMembership = readArray(fp('divisionMembership'), true);
+    // Process in ascending original id when present to keep new autoinc ids close to historical
+    DivisionMembership.sort((a, b) => (Number.isInteger(a?.id) ? a.id : 0) - (Number.isInteger(b?.id) ? b.id : 0));
     for (const r of DivisionMembership) {
-        const data = { id: r.id, userID: r.userID, divisionId: r.divisionId, lastComputedLevel: r.lastComputedLevel, lastComputedAt: toDate(r.lastComputedAt), lastAppliedNicknameLevel: r.lastAppliedNicknameLevel, lastNicknameUpdatedAt: toDate(r.lastNicknameUpdatedAt), nicknameSyncStatus: r.nicknameSyncStatus, notes: r.notes };
-        const exists = await prisma.divisionMembership.findUnique({ where: { id: r.id } });
-        if (exists) await prisma.divisionMembership.update({ where: { id: r.id }, data }); else await prisma.divisionMembership.create({ data });
+        const userId = r.userId ?? r.userID; // accept new or old backup shape
+        const data = { userId, divisionId: r.divisionId, lastComputedLevel: r.lastComputedLevel, lastComputedAt: toDate(r.lastComputedAt), lastAppliedNicknameLevel: r.lastAppliedNicknameLevel, lastNicknameUpdatedAt: toDate(r.lastNicknameUpdatedAt), nicknameSyncStatus: r.nicknameSyncStatus, notes: r.notes };
+        await prisma.divisionMembership.upsert({
+            where: { userId_divisionId: { userId, divisionId: r.divisionId } },
+            update: data,
+            create: data,
+        });
     }
     console.log(`[Import] DivisionMembership: ${DivisionMembership.length}`);
 
     const Merit = readArray(fp('merit'), true);
+    // Process in ascending original id when present; else by createdAt then userID for stability
+    Merit.sort((a, b) => {
+        const ai = Number.isInteger(a?.id) ? a.id : null;
+        const bi = Number.isInteger(b?.id) ? b.id : null;
+        if (ai != null && bi != null) return ai - bi;
+        if (ai != null) return -1;
+        if (bi != null) return 1;
+        const ac = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bc = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (ac !== bc) return ac - bc;
+        const au = String(a?.userID ?? '');
+        const bu = String(b?.userID ?? '');
+        return au.localeCompare(bu);
+    });
+    let meritCreated = 0, meritUpdated = 0;
     for (const r of Merit) {
         const data = { userID: r.userID, merits: r.merits, description: r.description, additionalNotes: r.additionalNotes, awardedBy: r.awardedBy, createdAt: toDate(r.createdAt), typeId: r.typeId, updatedAt: toDate(r.updatedAt) };
-        const exists = await prisma.merit.findUnique({ where: { userID: r.userID } });
-        if (exists) await prisma.merit.update({ where: { userID: r.userID }, data }); else await prisma.merit.create({ data });
+        if (typeof r.id === 'number' && Number.isInteger(r.id)) {
+            const exists = await prisma.merit.findUnique({ where: { id: r.id } }).catch(() => null);
+            if (exists) { await prisma.merit.update({ where: { id: r.id }, data }); meritUpdated++; }
+            else { await prisma.merit.create({ data: { ...data, id: r.id } }); meritCreated++; }
+        } else {
+            await prisma.merit.create({ data });
+            meritCreated++;
+        }
     }
-    console.log(`[Import] Merit: ${Merit.length}`);
+    console.log(`[Import] Merit: ${Merit.length} (created=${meritCreated}, updated=${meritUpdated})`);
 
     const EventType = readArray(fp('eventType'), true);
     for (const r of EventType) {
@@ -131,26 +159,62 @@ async function main() {
     console.log(`[Import] EventType: ${EventType.length}`);
 
     const Event = readArray(fp('event'), true);
-    for (const r of Event) {
-        const data = { id: r.id, name: r.name, description: r.description, createdAt: toDate(r.createdAt), eventDate: toDate(r.eventDate), typeId: r.typeId, updatedAt: toDate(r.updatedAt) };
-        const exists = await prisma.event.findUnique({ where: { id: r.id } });
-        if (exists) await prisma.event.update({ where: { id: r.id }, data }); else await prisma.event.create({ data });
+    const eventIdMap = new Map(); // oldId -> newId
+    if (REMAP_PARENTS) {
+        // Insert without ids, then map
+        for (const r of Event) {
+            const data = { name: r.name, description: r.description, createdAt: toDate(r.createdAt), eventDate: toDate(r.eventDate), typeId: r.typeId, updatedAt: toDate(r.updatedAt) };
+            const created = await prisma.event.create({ data });
+            if (typeof r.id === 'number') eventIdMap.set(r.id, created.id);
+        }
+    } else {
+        for (const r of Event) {
+            const data = { id: r.id, name: r.name, description: r.description, createdAt: toDate(r.createdAt), eventDate: toDate(r.eventDate), typeId: r.typeId, updatedAt: toDate(r.updatedAt) };
+            const exists = await prisma.event.findUnique({ where: { id: r.id } });
+            if (exists) await prisma.event.update({ where: { id: r.id }, data }); else await prisma.event.create({ data });
+        }
     }
-    console.log(`[Import] Event: ${Event.length}`);
+    console.log(`[Import] Event: ${Event.length}${REMAP_PARENTS ? ' (remapped ids)' : ''}`);
 
     const EventSession = readArray(fp('eventSession'), true);
-    for (const r of EventSession) {
-        const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
-        const exists = await prisma.eventSession.findUnique({ where: { id: r.id } });
-        if (exists) await prisma.eventSession.update({ where: { id: r.id }, data }); else await prisma.eventSession.create({ data });
+    const sessionIdMap = new Map(); // oldId -> newId (only in remap mode)
+    if (REMAP_PARENTS) {
+        // Create sessions without id/rootSessionId first, record map
+        for (const r of EventSession) {
+            const data = { guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
+            const created = await prisma.eventSession.create({ data });
+            if (typeof r.id === 'number') sessionIdMap.set(r.id, created.id);
+        }
+        // Second pass to wire rootSessionId where present
+        for (const r of EventSession) {
+            if (r.rootSessionId != null) {
+                const newId = sessionIdMap.get(r.id);
+                const newRoot = sessionIdMap.get(r.rootSessionId);
+                if (newId && newRoot) {
+                    await prisma.eventSession.update({ where: { id: newId }, data: { rootSessionId: newRoot } });
+                }
+            }
+        }
+    } else {
+        for (const r of EventSession) {
+            const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
+            const exists = await prisma.eventSession.findUnique({ where: { id: r.id } });
+            if (exists) await prisma.eventSession.update({ where: { id: r.id }, data }); else await prisma.eventSession.create({ data });
+        }
     }
-    console.log(`[Import] EventSession: ${EventSession.length}`);
+    console.log(`[Import] EventSession: ${EventSession.length}${REMAP_PARENTS ? ' (remapped ids)' : ''}`);
 
     const EventSessionParticipant = readArray(fp('eventSessionParticipant'), true);
+    // Process in ascending original id when present to keep new autoinc ids close to historical
+    EventSessionParticipant.sort((a, b) => (Number.isInteger(a?.id) ? a.id : 0) - (Number.isInteger(b?.id) ? b.id : 0));
     for (const r of EventSessionParticipant) {
-        const data = { id: r.id, eventSessionId: r.eventSessionId, userId: r.userId, totalSecondsPresent: r.totalSecondsPresent, totalSecondsSpeaking: r.totalSecondsSpeaking, lastJoinAt: toDate(r.lastJoinAt), lastSpeakAt: toDate(r.lastSpeakAt), updatedAt: toDate(r.updatedAt) };
-        const exists = await prisma.eventSessionParticipant.findUnique({ where: { id: r.id } });
-        if (exists) await prisma.eventSessionParticipant.update({ where: { id: r.id }, data }); else await prisma.eventSessionParticipant.create({ data });
+        const newEventSessionId = REMAP_PARENTS ? (sessionIdMap.get(r.eventSessionId) ?? r.eventSessionId) : r.eventSessionId;
+        const data = { eventSessionId: newEventSessionId, userId: r.userId, totalSecondsPresent: r.totalSecondsPresent, totalSecondsSpeaking: r.totalSecondsSpeaking, lastJoinAt: toDate(r.lastJoinAt), lastSpeakAt: toDate(r.lastSpeakAt), updatedAt: toDate(r.updatedAt) };
+        await prisma.eventSessionParticipant.upsert({
+            where: { eventSessionId_userId: { eventSessionId: newEventSessionId, userId: r.userId } },
+            update: data,
+            create: data,
+        });
     }
     console.log(`[Import] EventSessionParticipant: ${EventSessionParticipant.length}`);
 
