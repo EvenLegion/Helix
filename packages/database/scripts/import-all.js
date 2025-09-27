@@ -4,7 +4,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PrismaClient } from '@prisma/client';
+// Use the generated Prisma Client local to this package to ensure it matches the current schema (ESM needs explicit file path)
+import { PrismaClient } from '../generated/prisma/index.js';
 
 const prisma = new PrismaClient();
 
@@ -137,9 +138,9 @@ async function main() {
     }
     console.log(`[Import] Event: ${Event.length}`);
 
-        const EventSession = readArray(fp('eventSession'), true);
-        for (const r of EventSession) {
-            const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
+    const EventSession = readArray(fp('eventSession'), true);
+    for (const r of EventSession) {
+        const data = { id: r.id, rootSessionId: r.rootSessionId, guildId: r.guildId, channelId: r.channelId, createdByBot: !!r.createdByBot, startedBy: r.startedBy, startedAt: toDate(r.startedAt), endedAt: toDate(r.endedAt), status: r.status, meritTypeId: r.meritTypeId, awardDescription: r.awardDescription };
         const exists = await prisma.eventSession.findUnique({ where: { id: r.id } });
         if (exists) await prisma.eventSession.update({ where: { id: r.id }, data }); else await prisma.eventSession.create({ data });
     }
