@@ -1,4 +1,4 @@
-type Info = { channelId: string; messageId: string; threadId?: string };
+type Info = { channelId: string; messageId?: string; threadId?: string };
 
 const bySession = new Map<number, Info>();
 

@@ -1,5 +1,5 @@
 import type { ChatInputCommandContext, CommandData } from "commandkit";
-import { ChannelType, MessageFlags, VoiceChannel, StageChannel, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { ChannelType, MessageFlags, VoiceChannel, StageChannel, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel } from "discord.js";
 import { prisma } from "@workspace/db";
 import { startSessionTracker, stopSessionTracker } from "../../services/sessionTracker";
 import { forInteraction as loggerForInteraction } from "@workspace/logger";
@@ -7,6 +7,17 @@ import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { setPageNames } from "../../services/nameCache.ts";
 import { upsertReviewState, getReviewStateKey } from "../../services/reviewStore.ts";
+import { setNotifyInfo, getNotifyInfo } from "../../services/notifyStore";
+
+// Notify channel config (aligns with session tracker defaults)
+const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_ENV || "").toLowerCase())
+  || String(process.env.EVENT_INACTIVITY_DEV || "").toLowerCase() === "1";
+const NOTIFY_CHANNEL_NAME = (process.env.EVENT_NOTIFY_CHANNEL && process.env.EVENT_NOTIFY_CHANNEL.trim().length)
+  ? process.env.EVENT_NOTIFY_CHANNEL.trim()
+  : (IS_DEV ? "commands" : "bot-requests");
+const NOTIFY_CHANNEL_ID = (process.env.EVENT_NOTIFY_CHANNEL_ID && process.env.EVENT_NOTIFY_CHANNEL_ID.trim().length)
+  ? process.env.EVENT_NOTIFY_CHANNEL_ID.trim()
+  : undefined;
 
 export const command: CommandData = {
   name: "event",
@@ -212,6 +223,77 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       },
     });
     log.debug({ userId: interaction.user.id, guildId: guild.id, channelId: targetVcId, sessionId: session.id, meritType: chosen.name }, "event.start created");
+    // Create a root-session thread in the notify channel and seed it with details
+    try {
+      let notifyChan: TextChannel | undefined;
+      if (NOTIFY_CHANNEL_ID) {
+        const cand = guild.channels.cache.get(NOTIFY_CHANNEL_ID) ?? await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined as any);
+        if (cand && cand.type === ChannelType.GuildText) {
+          notifyChan = cand as TextChannel;
+        }
+      }
+      if (!notifyChan) {
+        const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+        const candByName = guild.channels.cache.find((c: any) => c.name === desiredName && c.isTextBased() && c.type === ChannelType.GuildText);
+        if (candByName) notifyChan = candByName as unknown as TextChannel;
+      }
+      if (!notifyChan) {
+        const fallbacks = ["bot-requests", "commands", "bot-commands", "bot"];
+        for (const name of fallbacks) {
+          const ch = guild.channels.cache.find((c: any) => c.name === name && c.isTextBased() && c.type === ChannelType.GuildText);
+          if (ch) { notifyChan = ch as unknown as TextChannel; break; }
+        }
+      }
+      if (notifyChan) {
+        // Compute thread name using channel NAME per spec
+        const vcForName = guild.channels.cache.get(targetVcId) ?? await guild.channels.fetch(targetVcId).catch(() => null as any);
+        const vcNameForThread = (vcForName as any)?.name || `vc-${targetVcId}`;
+        const prefix = `Event started: ${vcNameForThread}: `;
+        const maxLen = 100;
+        const maxDesc = Math.max(0, maxLen - prefix.length);
+        const descForName = descOpt.slice(0, maxDesc);
+        const threadName = `${prefix}${descForName}`;
+
+        // Try to create the thread directly, without sending a parent message
+        let thread: any | null = null;
+        try {
+          const created = await (notifyChan as any).threads.create({
+            name: threadName,
+            autoArchiveDuration: 60,
+            type: ChannelType.PublicThread,
+            reason: `Event root session ${session.id}`,
+          });
+          thread = created;
+          try {
+            log.debug({ threadId: (created as any)?.id, notifyChannelId: (notifyChan as any)?.id, threadType: (created as any)?.type }, "event.start: created thread directly in notify channel");
+          } catch { /* ignore log errors */ }
+        } catch (e) {
+          // Fallback: create a minimal parent message (will be deleted) and then start a thread
+          try { log.warn({ err: e }, "event.start: direct thread create failed; falling back to parent message + startThread"); } catch { }
+          try {
+            const parent = await (notifyChan as any).send({ content: `Event started: <#${targetVcId}>: ${descOpt}` });
+            thread = await (parent as any).startThread({ name: threadName, autoArchiveDuration: 60, reason: `Event root session ${session.id}` });
+            try {
+              log.debug({ threadId: (thread as any)?.id, parentMessageId: (parent as any)?.id, notifyChannelId: (notifyChan as any)?.id }, "event.start: started thread from parent message");
+            } catch { }
+            // Delete the parent message to avoid clutter
+            let deleted = false;
+            try { await (parent as any).delete?.(); deleted = true; } catch { deleted = false; }
+            try { log.debug({ parentMessageId: (parent as any)?.id, deleted }, "event.start: parent message cleanup"); } catch { }
+          } catch (e2) {
+            try { log.error({ err: e2 }, "event.start: fallback parent+thread strategy failed"); } catch { }
+            throw e2;
+          }
+        }
+        if (thread) {
+          const combined = `Event started: <#${targetVcId}>: ${descOpt}\nEvent: ${descOpt}, Started by: <@${interaction.user.id}>, Tracking root session: ${session.id} for merit type: ${chosen.name}`;
+          await thread.send({ content: combined });
+          setNotifyInfo(session.id, { channelId: (notifyChan as any).id as string, threadId: (thread as any).id as string });
+        }
+      }
+    } catch (e) {
+      log.warn({ err: e }, "Failed to create root session thread");
+    }
     startSessionTracker(client, session.id, guild.id, targetVcId);
     return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).\nDescription: ${descOpt}`, flags: MessageFlags.Ephemeral });
   }
@@ -392,6 +474,19 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       },
     });
     startSessionTracker(client, child.id, guild.id, finalVcId);
+    // Post an "added session" update into the root thread, and map child to same thread
+    try {
+      const info = getNotifyInfo(root.id);
+      if (info?.threadId) {
+        const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
+        if (thread && (thread as any).send) {
+          await (thread as any).send({ content: `Added session ${child.id} for <#${finalVcId}>${createdChannel ? " (created new channel)" : ""}.` });
+        }
+        setNotifyInfo(child.id, info);
+      }
+    } catch (e) {
+      log.warn({ err: e }, "Failed to announce added session in root thread");
+    }
     const createdSuffix = createdChannel ? " (created new channel)" : "";
     return interaction.reply({ content: `Added <#${finalVcId}> to event (root session ${root.id}) as session ${child.id}${createdSuffix}.`, flags: MessageFlags.Ephemeral });
   }

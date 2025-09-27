@@ -2,13 +2,22 @@ import { ChannelType, VoiceChannel, StageChannel } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel, PermissionsBitField } from "discord.js";
 import { prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
-import { setNotifyInfo } from "../services/notifyStore";
+import { getNotifyInfo, setNotifyInfo } from "../services/notifyStore";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
 const prevMemberNamesBySession = new Map<number, Map<string, string>>();
 const lastActivityBySession = new Map<number, number>();
+// Group-level last activity across all sessions under a root
+const lastGroupActivityByRoot = new Map<number, number>();
+// child sessionId -> rootId
+const sessionToRoot = new Map<number, number>();
+// rootId -> root channelId
+const rootChannelIdByRoot = new Map<number, string>();
+// One inactivity watcher per root group (keyed by rootId)
 const inactivityWatchers = new Map<number, NodeJS.Timeout>();
+// Roots that have already sent an inactivity notification (to avoid duplicates)
+const rootInactivityNotified = new Set<number>();
 
 // Simple sampling approach: every SAMPLE_SECONDS, count present members and increment totals.
 // Speaking detection is non-trivial via discord.js; speaking events require a voice receiver/bot in channel.
@@ -95,16 +104,22 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
     }
   }
 
-  // Resolve leadership roles for mentions
+  // Resolve leadership roles for mentions (Admirals, Imperators, Staff, Admin role if present), and the event creator
   const admirals = findRole(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
   const imperators = findRole(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
-  log.debug({ admiralsId: admirals?.id, imperatorsId: imperators?.id }, "Resolved leadership roles for inactivity mention");
+  const staffRole = findRole(guild, ["Server Staff", "Staff"]);
+  const adminRole = findRole(guild, ["Admin", "Administrator"]);
+  log.debug({ admiralsId: admirals?.id, imperatorsId: imperators?.id, staffId: staffRole?.id, adminId: adminRole?.id }, "Resolved leadership roles for inactivity mention");
 
   let mention = "";
   if (admirals) mention += `<@&${admirals.id}> `;
-  if (imperators) mention += `<@&${imperators.id}>`;
-
-  const msg = `⚠️ Event session ${sessionId} in <#${vcId}>${descPart} has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. Please review and close the event if appropriate.\nrun: /event stop <#${vcId}> to close out the event, or click the button below to close the event.`;
+  if (imperators) mention += `<@&${imperators.id}> `;
+  if (staffRole) mention += `<@&${staffRole.id}> `;
+  if (adminRole) mention += `<@&${adminRole.id}> `;
+  const creatorMention = session?.startedBy ? `<@${session.startedBy}> ` : "";
+  const msg = `${mention}${creatorMention}Please make sure someone closes out the merit tracking for event session ${sessionId} in <#${vcId}>${descPart}.\nUse /event stop <#${vcId}> or click the button below to close the event.`.trim();
+  const mentionRoleIds = [admirals?.id, imperators?.id, staffRole?.id, adminRole?.id].filter(Boolean) as string[];
+  const mentionUserIds = session?.startedBy ? [session.startedBy] : [];
   const components = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -128,133 +143,90 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
     }
   }
 
-  // Resolve notify channel by ID first, then by name (with fallbacks)
-  let notifyChan: TextChannel | undefined;
-  if (NOTIFY_CHANNEL_ID) {
-    notifyChan = (guild.channels.cache.get(NOTIFY_CHANNEL_ID) as TextChannel) || (await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined) as any);
-    log.debug({ channelId: NOTIFY_CHANNEL_ID, found: !!notifyChan }, "Notify channel resolution by ID");
-  }
-  if (!notifyChan) {
-    const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
-    notifyChan = guild.channels.cache.find((c: any) => c.name === desiredName && c.isTextBased()) as TextChannel | undefined;
-    log.debug({ desiredName, found: !!notifyChan }, "Notify channel resolution by name");
-  }
-  if (!notifyChan) {
-    const fallbacks = ["bot-requests", "commands", "bot-commands", "bot"]; // try some common names
-    for (const name of fallbacks) {
-      const ch = guild.channels.cache.find((c: any) => c.name === name && c.isTextBased());
-      if (ch) { notifyChan = ch as TextChannel; log.debug({ name }, "Notify channel fallback matched by name"); break; }
-    }
-  }
-  if (!notifyChan) {
-    const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
-    log.warn({ desiredName, desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; skipping channel notification and relying on dev DM if enabled");
-    return;
-  }
-  log.debug({ channelId: notifyChan.id, guildId }, "Sending inactivity notification to configured channel");
-  const sent = await (notifyChan as any).send({ content: msg, components, allowedMentions: { parse: [], repliedUser: false } });
-  log.debug({ messageId: (sent as any).id }, "Inactivity notification sent");
-
-  // Try to create a thread for follow-up actions/closure status
+  // Try to post inside the existing root thread, or create/reuse a thread by name; avoid parent-channel messages
+  let threadToUse: any | undefined;
   try {
-    let threadId: string | undefined;
-    let threadObj: any | undefined;
-    const anyMsg = sent as any;
-    // Build a readable thread name: "Stale Event Tracking: <VC Name>"
-    const vc = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
-    const vcName = (vc as any)?.name || `vc-${vcId}`;
-    const MAX = 100;
-    let name = `Stale Event Tracking: ${vcName}`;
-    if (name.length > MAX) {
-      name = name.slice(0, MAX);
+    const info = getNotifyInfo(rootId);
+    if (info?.threadId) {
+      const fetched = await guild.channels.fetch(info.threadId).catch(() => null as any);
+      if (fetched && (fetched as any).send) threadToUse = fetched as any;
     }
-    // Create a thread anchored to the alert message (preferred)
-    // Check permissions to provide clearer diagnostics
-    try {
-      const me = guild.members.me ?? await guild.members.fetch(client.user!.id);
-      const perms = notifyChan.permissionsFor(me!);
-      const canCreatePublic = perms?.has(PermissionsBitField.Flags.CreatePublicThreads) ?? false;
-      const canCreatePrivate = perms?.has(PermissionsBitField.Flags.CreatePrivateThreads) ?? false;
-      const canSendInThreads = perms?.has(PermissionsBitField.Flags.SendMessagesInThreads) ?? false;
-      log.debug({ canCreatePublic, canCreatePrivate, canSendInThreads, channelType: (notifyChan as any).type }, "Thread permissions in notify channel");
-    } catch (e) {
-      log.warn({ err: e }, "Failed to check bot permissions in notify channel");
+  } catch { /* ignore */ }
+
+  // Resolve notify channel (needed to search or create a thread)
+  let notifyChan: TextChannel | undefined;
+  if (!threadToUse) {
+    if (NOTIFY_CHANNEL_ID) {
+      notifyChan = (guild.channels.cache.get(NOTIFY_CHANNEL_ID) as TextChannel) || (await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined) as any);
+      log.debug({ channelId: NOTIFY_CHANNEL_ID, found: !!notifyChan }, "Notify channel resolution by ID");
     }
-    let threadError: any | undefined;
-    // Attempt channel.threads.create with startMessage to guarantee anchoring
-    try {
-      const created = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, startMessage: anyMsg, type: ChannelType.PublicThread, reason: `Inactivity for session ${rootId}` });
-      threadId = created?.id as string | undefined;
-      threadObj = created;
-      log.debug({ threadId, parentMessageId: anyMsg.id, threadType: created?.type, threadUrl: created?.url }, "Primary thread create (startMessage) succeeded");
-    } catch (e) {
-      threadError = e;
-      log.warn({ err: e }, "channel.threads.create with startMessage failed; trying message.startThread next");
+    if (!notifyChan) {
+      const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+      notifyChan = guild.channels.cache.find((c: any) => c.name === desiredName && c.isTextBased()) as TextChannel | undefined;
+      log.debug({ desiredName, found: !!notifyChan }, "Notify channel resolution by name");
     }
-    if (!threadObj && typeof anyMsg.startThread === 'function') {
-      try {
-        const thread = await anyMsg.startThread({ name, autoArchiveDuration: 60, reason: `Inactivity for session ${rootId}` });
-        threadId = thread?.id as string | undefined;
-        threadObj = thread;
-        log.debug({ threadId, parentMessageId: anyMsg.id, threadType: (thread as any)?.type, threadUrl: (thread as any)?.url }, "Fallback message.startThread succeeded");
-      } catch (e) {
-        threadError = e;
-        log.warn({ err: e }, "message.startThread failed; will attempt channel.threads.create without startMessage");
+    if (!notifyChan) {
+      const fallbacks = ["bot-requests", "commands", "bot-commands", "bot"]; // try some common names
+      for (const name of fallbacks) {
+        const ch = guild.channels.cache.find((c: any) => c.name === name && c.isTextBased());
+        if (ch) { notifyChan = ch as TextChannel; log.debug({ name }, "Notify channel fallback matched by name"); break; }
       }
-    } else if (!threadObj) {
-      log.warn("Cannot start thread: message.startThread not available on sent message");
     }
-    if (!threadObj) {
-      // Fallback to creating a standalone public thread if supported
+    if (!notifyChan) {
+      const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+      log.warn({ desiredName, desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; cannot post inactivity");
+      return;
+    }
+    // Compute expected thread name
+    const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+    const vcNameForThread = (vcForName as any)?.name || `vc-${vcId}`;
+    const prefix = `Event started: ${vcNameForThread}: `;
+    const MAX = 100;
+    const maxDesc = Math.max(0, MAX - prefix.length);
+    const descForName = awardDesc.slice(0, maxDesc);
+    const expectedName = `${prefix}${descForName}`;
+    // Try to find an existing thread by name (active then archived)
+    try { await (notifyChan as any).threads.fetchActive(); } catch { /* ignore */ }
+    threadToUse = (notifyChan as any).threads?.cache?.find?.((t: any) => t?.name === expectedName && typeof t?.send === 'function');
+    if (!threadToUse) {
       try {
-        const created = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, type: ChannelType.PublicThread, reason: `Inactivity for session ${rootId}` });
-        threadId = created?.id as string | undefined;
-        threadObj = created;
-        log.debug({ threadId, parentMessageId: anyMsg.id, threadType: created?.type, threadUrl: created?.url }, "Fallback channel.threads.create (no startMessage) succeeded");
-      } catch (e) {
-        log.warn({ err: e, prevErr: threadError }, "Both thread creation strategies failed; will try private thread if permissions allow");
-        // Try private thread as a last resort
+        const archived: any = await (notifyChan as any).threads.fetchArchived?.().catch(() => null);
+        const threads = archived?.threads || archived || [];
+        threadToUse = threads.find?.((t: any) => t?.name === expectedName && typeof t?.send === 'function');
+      } catch { /* ignore */ }
+    }
+    // Create a new thread directly (no parent-channel message) if none found
+    if (!threadToUse) {
+      try {
+        const created = await (notifyChan as any).threads.create({ name: expectedName, autoArchiveDuration: 60, type: ChannelType.PublicThread, reason: `Inactivity for session ${rootId}` });
+        threadToUse = created;
+        log.debug({ threadId: created?.id }, "Created new thread for inactivity (no parent message)");
+      } catch (e1) {
+        log.warn({ err: e1 }, "Failed to create public thread; trying private thread");
         try {
-          const createdPriv = await (notifyChan as any).threads.create({ name, autoArchiveDuration: 60, reason: `Inactivity for session ${rootId}`, type: ChannelType.PrivateThread });
-          threadId = createdPriv?.id as string | undefined;
-          threadObj = createdPriv;
-          log.debug({ threadId, parentMessageId: anyMsg.id, threadType: createdPriv?.type, threadUrl: createdPriv?.url }, "Private thread creation succeeded");
+          const createdPriv = await (notifyChan as any).threads.create({ name: expectedName, autoArchiveDuration: 60, type: ChannelType.PrivateThread, reason: `Inactivity for session ${rootId}` });
+          threadToUse = createdPriv;
+          log.debug({ threadId: createdPriv?.id }, "Created private thread for inactivity");
         } catch (e2) {
-          log.warn({ err: e2 }, "Private thread creation also failed");
+          log.error({ err: e2 }, "Failed to create any thread for inactivity");
+        }
+      }
+      if (threadToUse) {
+        const id = (threadToUse as any).id as string | undefined;
+        if (id) {
+          setNotifyInfo(sessionId, { channelId: (notifyChan as any).id as string, threadId: id });
+          if (rootId && rootId !== sessionId) setNotifyInfo(rootId, { channelId: (notifyChan as any).id as string, threadId: id });
         }
       }
     }
-    // Post leadership ping inside the thread for focused follow-up
-    try {
-      // Only ping leadership roles in the thread; don't @ the dev/user specifically here
-      const pingLine = `${mention}`.trim();
-      const jump = (sent as any)?.url as string | undefined;
-      if (threadObj) {
-        await threadObj.send({
-          content: `${pingLine}${pingLine ? ' — ' : ''}Event session ${rootId} in <#${vcId}>${descPart} has had no voice activity for ${INACTIVITY_MINUTES} minutes or the channel was closed. ${jump ?? ''}`.trim(),
-          components,
-          allowedMentions: { parse: ['roles'], repliedUser: false },
-        });
-        log.debug({ threadId, threadUrl: (threadObj as any)?.url }, "Posted leadership ping inside thread");
-      } else {
-        // As a fallback when no thread could be created, edit the parent message to include the role ping so leadership is notified
-        const fallbackContent = `${pingLine}${pingLine ? ' — ' : ''}${msg}`;
-        await (anyMsg.edit?.({ content: fallbackContent, components, allowedMentions: { parse: ['roles'], repliedUser: false } }) ?? Promise.resolve());
-        log.warn("Thread not created; edited parent message to include role mention as fallback");
-      }
-    } catch (e) {
-      log.warn({ err: e }, "Failed to send leadership ping to thread");
-    }
-    // Store under child and root ids for robustness (only if a thread was actually created)
-    if (threadId) {
-      setNotifyInfo(sessionId, { channelId: (notifyChan as any).id as string, messageId: (sent as any).id as string, threadId });
-      if (rootId && rootId !== sessionId) setNotifyInfo(rootId, { channelId: (notifyChan as any).id as string, messageId: (sent as any).id as string, threadId });
-      log.debug({ threadId, rootId }, "Inactivity thread created and stored");
-    } else {
-      log.warn({ rootId }, "No threadId present after creation attempts; using parent message fallback only");
-    }
-  } catch (e) {
-    log.warn({ err: e }, "Failed to create or store inactivity thread");
+  }
+
+  // Post the inactivity message inside the thread only
+  if (threadToUse) {
+    await (threadToUse as any).send({ content: msg, components, allowedMentions: { roles: mentionRoleIds, users: mentionUserIds, parse: [], repliedUser: false } });
+    log.debug({ threadId: (threadToUse as any).id }, "Inactivity notification posted inside thread");
+  } else {
+    log.warn("No thread available to post inactivity; skipping message");
   }
 }
 
@@ -265,30 +237,46 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
 
   // Load session to identify the creator responsible for the event
   let creatorId: string | null = null;
+  // Determine group/root for inactivity consolidation
+  let rootId: number = sessionId;
+  let rootVcId: string = vcId;
   try {
     const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     creatorId = session?.startedBy || null;
-    log.debug({ creatorId }, "Loaded event session creator");
+    if (session?.rootSessionId) {
+      rootId = session.rootSessionId;
+      const root = await prisma.eventSession.findUnique({ where: { id: rootId } });
+      rootVcId = root?.channelId || vcId;
+    } else {
+      rootId = session?.id || sessionId;
+      rootVcId = session?.channelId || vcId;
+    }
+    sessionToRoot.set(sessionId, rootId);
+    rootChannelIdByRoot.set(rootId, rootVcId);
+    if (!lastGroupActivityByRoot.has(rootId)) lastGroupActivityByRoot.set(rootId, Date.now());
+    log.debug({ creatorId, rootId, rootVcId }, "Loaded event session creator and group context");
   } catch (err) {
     log.warn({ err }, "Failed to load event session; proceeding without creator enforcement");
   }
 
-  // Start inactivity watcher
+  // Start inactivity watcher (group-wide on root)
   lastActivityBySession.set(sessionId, Date.now());
-  if (!inactivityWatchers.has(sessionId)) {
+  if (!inactivityWatchers.has(rootId)) {
     const watcher = setInterval(async () => {
-      const last = lastActivityBySession.get(sessionId) || 0;
+      const last = lastGroupActivityByRoot.get(rootId) || 0;
       const elapsed = Date.now() - last;
-      log.debug({ last, elapsedMs: elapsed, thresholdMs: INACTIVITY_MS, thresholdMin: INACTIVITY_MINUTES }, "Inactivity check");
+      log.debug({ rootId, last, elapsedMs: elapsed, thresholdMs: INACTIVITY_MS, thresholdMin: INACTIVITY_MINUTES }, "Group inactivity check");
       if (elapsed > INACTIVITY_MS) {
-        log.info("Inactivity threshold reached; notifying leadership");
-        await notifyInactivity(client, guildId, sessionId, vcId);
+        log.info("Group inactivity threshold reached; notifying leadership once for root");
+        const rootVc = rootChannelIdByRoot.get(rootId) || vcId;
+        await notifyInactivity(client, guildId, rootId, rootVc);
+        rootInactivityNotified.add(rootId);
         clearInterval(watcher);
-        inactivityWatchers.delete(sessionId);
+        inactivityWatchers.delete(rootId);
       }
       // VC deletion is handled in tick below
     }, 60_000);
-    inactivityWatchers.set(sessionId, watcher);
+    inactivityWatchers.set(rootId, watcher);
   }
 
   const tick = async () => {
@@ -299,8 +287,14 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
         // End session if channel not found
         await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
         log.warn("Channel not found; ending session");
-        log.debug("Channel missing or deleted; sending inactivity/closure notification");
-        await notifyInactivity(client, guildId, sessionId, vcId);
+        // Only notify once from the root session context and only if not already notified
+        if (sessionId === rootId && !rootInactivityNotified.has(rootId)) {
+          log.debug("Root channel missing or deleted; sending inactivity/closure notification");
+          await notifyInactivity(client, guildId, rootId, rootVcId);
+          rootInactivityNotified.add(rootId);
+        } else {
+          log.debug({ rootId }, "Child channel missing or deleted; skipping notification (root watcher will handle group inactivity)");
+        }
         stopSessionTracker(sessionId);
         return;
       }
@@ -320,18 +314,24 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       });
       const creatorPresent = !!(creatorId && members.has(creatorId));
 
-      // Update last activity only when someone is potentially speaking AND the creator is present
-      if (speakingCandidates.length > 0 && creatorPresent) {
+      // Update last activity only when someone is potentially speaking OR the creator is present
+      if (speakingCandidates.length > 0 || creatorPresent) {
         lastActivityBySession.set(sessionId, Date.now());
         log.debug(
           { members: members.size, speakingLike: speakingCandidates.length, creatorPresent },
-          "Speaking-like activity with creator present; lastActivity updated"
+          "Speaking-like activity OR creator present; lastActivity updated"
         );
       } else {
         log.debug(
           { members: members.size, speakingLike: speakingCandidates.length, creatorPresent },
           "No speaking-like activity or creator not present; lastActivity NOT updated"
         );
+      }
+
+      // Bump group-level activity whenever anyone is speaking-like in any VC of this group
+      if (speakingCandidates.length > 0) {
+        lastGroupActivityByRoot.set(rootId, Date.now());
+        rootInactivityNotified.delete(rootId);
       }
 
       // Upsert participants and add SAMPLE_SECONDS to presence time for everyone connected
@@ -433,11 +433,22 @@ export function stopSessionTracker(sessionId: number) {
     clearInterval(t);
     activeTimers.delete(sessionId);
     prevMembersBySession.delete(sessionId);
+    prevMemberNamesBySession.delete(sessionId);
     const log = childLogger({ mod: "eventTrack", sessionId });
     log.debug("Stopped session tracker");
-    if (inactivityWatchers.has(sessionId)) {
-      clearInterval(inactivityWatchers.get(sessionId));
-      inactivityWatchers.delete(sessionId);
+    // Determine the root group for this session
+    const rootId = sessionToRoot.get(sessionId) ?? sessionId;
+    sessionToRoot.delete(sessionId);
+    // If no other sessions in this root group are active, clear the group inactivity watcher
+    const anyOthers = Array.from(activeTimers.keys()).some(sid => sid !== sessionId && (sessionToRoot.get(sid) ?? sid) === rootId);
+    if (!anyOthers) {
+      const watcher = inactivityWatchers.get(rootId);
+      if (watcher) {
+        clearInterval(watcher);
+        inactivityWatchers.delete(rootId);
+      }
+      lastGroupActivityByRoot.delete(rootId);
+      rootChannelIdByRoot.delete(rootId);
     }
     lastActivityBySession.delete(sessionId);
   }
