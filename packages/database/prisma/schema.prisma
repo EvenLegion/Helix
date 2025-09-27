@@ -1,99 +1,77 @@
 generator client {
-<<<<<<< HEAD
   provider = "prisma-client-js"
-=======
-    provider = "prisma-client-js"
-    output   = "./../generated/prisma"
->>>>>>> origin/master
+  output   = "./../generated/prisma"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
-    schemas  = ["arbiter", "nexus"]
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["arbiter", "nexus"]
 }
 
 model User {
-<<<<<<< HEAD
   id                 String              @id
   username           String?
   nickname           String?
-  preferredName      String?
   name               String?
   email              String?
   emailVerified      Boolean?
   image              String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  Merit              Merit?
+  Merit              Merit[]
   nameChangeRequests NameChangeRequest[]
   accounts           Account[]
   sessions           Session[]
-=======
-    id                 String              @id
-    username           String?
-    nickname           String?
-    name               String?
-    email              String?
-    emailVerified      Boolean?
-    image              String?
-    createdAt          DateTime            @default(now())
-    updatedAt          DateTime            @updatedAt
-    Merit              Merit[]
-    nameChangeRequests NameChangeRequest[]
-    accounts           Account[]
-    sessions           Session[]
->>>>>>> origin/master
 
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Session {
-    id        String   @id
-    expiresAt DateTime
-    token     String   @unique
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-    ipAddress String?
-    userAgent String?
-    userId    String
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Account {
-    id                    String    @id
-    accountId             String
-    providerId            String
-    userId                String
-    accessToken           String?
-    refreshToken          String?
-    idToken               String?
-    accessTokenExpiresAt  DateTime?
-    refreshTokenExpiresAt DateTime?
-    scope                 String?
-    password              String?
-    createdAt             DateTime  @default(now())
-    updatedAt             DateTime  @updatedAt
-    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Verification {
-    id         String    @id
-    identifier String
-    value      String
-    expiresAt  DateTime
-    createdAt  DateTime? @default(now())
-    updatedAt  DateTime? @updatedAt
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
 
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model NameChangeRequest {
-<<<<<<< HEAD
   id            Int      @id @default(autoincrement())
   userId        String
   currentName   String
@@ -121,40 +99,12 @@ model Merit {
   updatedAt       DateTime  @updatedAt
   meritType       MeritType @relation(fields: [typeId], references: [id])
   user            User      @relation(fields: [userID], references: [id])
-=======
-    id            Int      @id @default(autoincrement())
-    userId        String   @db.Char(19)
-    currentName   String
-    requestedName String
-    reason        String
-    denyReason    String?
-    approved      Boolean  @default(false)
-    approvedBy    String?  @db.Char(19)
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
-    user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@schema("arbiter")
-}
-
-model Merit {
-    userID          String    @id @db.Char(19)
-    merits          Int
-    description     String    @db.VarChar(255)
-    additonal_notes String    @db.VarChar(255)
-    awarded_by      String    @db.Char(19)
-    createdAt       DateTime  @default(now())
-    updatedAt       DateTime  @updatedAt
-    type_id         Int
-    merit_type      MeritType @relation(fields: [type_id], references: [id])
-    user            User      @relation(fields: [userID], references: [id])
->>>>>>> origin/master
-
-    @@schema("arbiter")
+  @@map("merit")
+  @@schema("arbiter")
 }
 
 model MeritType {
-<<<<<<< HEAD
   id                 Int            @id
   name               String         @db.VarChar(100)
   description        String         @db.VarChar(255)
@@ -284,29 +234,19 @@ model DivisionMembership {
   @@index([userID])
   @@map("divisionMembership")
   @@schema("arbiter")
-=======
-    id          Int      @id
-    name        String   @db.VarChar(100)
-    description String   @db.VarChar(255)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
-    merit       Merit[]
-
-    @@schema("arbiter")
 }
 
 model DiscordRoles {
-    id          Int      @id @default(autoincrement())
-    role_id     String
-    name        String
-    color       String
-    permissions String
-    position    Int
-    hoist       Boolean
-    memberCount Int
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  role_id     String
+  name        String
+  color       String
+  permissions String
+  position    Int
+  hoist       Boolean
+  memberCount Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-    @@schema("arbiter")
->>>>>>> origin/master
+  @@schema("arbiter")
 }
