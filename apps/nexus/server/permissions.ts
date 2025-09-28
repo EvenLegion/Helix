@@ -9,7 +9,7 @@ export const isAdmin = async () => {
             headers: await headers(),
             body: {
                 permissions: {
-                    admin: ['access_admin_panel']
+                    admin: ['admin_dashboard']
                 }
             }
         });

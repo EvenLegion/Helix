@@ -3,7 +3,7 @@ import { organization } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
-import { ac, staff, admin, member, owner } from "@/lib/auth/permissions";
+import { ac, owner } from "@/lib/auth/permissions";
 import { getActiveOrganization } from "@/server/organizations";
 
 interface Account {
@@ -33,10 +33,10 @@ export const auth = betterAuth({
         organization({
             ac,
             roles: {
-                staff,
-                admin,
-                member,
                 owner
+            },
+            dynamicAccessControl: {
+                enabled: true,
             }
         }),
         nextCookies(),

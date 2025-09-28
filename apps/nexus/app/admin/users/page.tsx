@@ -10,7 +10,8 @@ import {
     DialogTrigger,
 } from '@workspace/ui/components/dialog'
 import { Button } from '@workspace/ui/components/button'
-import { CreateOrganizationForm } from 'components/forms/create-organization-form'
+import { CreateOrganizationForm } from '@/components/forms/user/create-organization-form'
+import { CreateRoleForm } from '@/components/forms/user/create-role-form'
 import {
     Card,
     CardHeader,
@@ -63,7 +64,20 @@ export default async function Dashboard() {
                     <CreateOrganizationForm />
                 </DialogContent>
             </Dialog>
-            <Button className="mt-8 ml-1">Invite Members</Button>
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Button className="mt-8 ml-4">Create Roles</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Create New Role</DialogTitle>
+                        <DialogDescription>
+                            Create a new role to manage permissions within your organization.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <CreateRoleForm />
+                </DialogContent>
+            </Dialog>
             <Card className="mt-8 w-full">
                 <FilteredMembersTable allMembers={allMembers} />
             </Card>

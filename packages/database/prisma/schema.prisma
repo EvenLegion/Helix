@@ -132,14 +132,15 @@ model MeritType {
 }
 
 model Organization {
-    id         String       @id @default(uuid())
-    name       String
-    slug       String
-    logo       String?
-    metadata   String?
-    createdAt  DateTime     @default(now())
-    Member     Member[]
-    Invitation Invitation[]
+    id               String             @id @default(uuid())
+    name             String
+    slug             String
+    logo             String?
+    metadata         String?
+    createdAt        DateTime           @default(now())
+    Member           Member[]
+    Invitation       Invitation[]
+    OrganizationRole OrganizationRole[]
 
     @@map("organization")
     @@schema("nexus")
@@ -172,5 +173,18 @@ model Invitation {
     organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
     @@map("invitation")
+    @@schema("nexus")
+}
+
+model OrganizationRole {
+    id             String       @id @default(uuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    role           String
+    permission     String
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime?    @updatedAt
+
+    @@map("organizationRole")
     @@schema("nexus")
 }

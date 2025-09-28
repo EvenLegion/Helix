@@ -15,13 +15,13 @@ export interface MenuGroup {
 export const menuItems = {
     navMain: [
         {
-            title: 'Home',
+            title: 'Welcome',
             url: '/',
             icon: House
         },
         {
-            title: 'Dashboard',
-            url: '/dashboard',
+            title: 'Recruitment',
+            url: '/recruitment',
             icon: House
         },
     ],

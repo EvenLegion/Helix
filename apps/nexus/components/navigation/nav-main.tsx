@@ -8,10 +8,8 @@ import {
 } from "@workspace/ui/components/sidebar";
 import {
     Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
 } from "@workspace/ui/components/collapsible";
-import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -27,15 +25,32 @@ export function NavMain({
 
     const pathName = usePathname();
 
-    const isActive = (url: string) => {
-        if (url === '/' && pathName === '/') return true
-        if (url !== '/' && pathName.startsWith(url)) return true
-        return false
-    }
+        const isActive = (url: string) => {
+            // Exact match for admin routes
+            if (url === '/' && pathName === '/') return true
+
+            // For other routes, check if the pathname starts with the url
+            if (url !== '/') {
+
+                if (pathName === url) return true
+
+                // Check URL Segments
+                const pathSegments = pathName.split('/').filter(Boolean);
+                const urlSegments = url.split('/').filter(Boolean);
+
+                // Ensure the URL segments are a prefix of the path segments
+                if (pathSegments.length === urlSegments.length + 1 &&
+                    pathName.startsWith(url + '/')) {
+                    return true;
+                }
+            }
+            return false
+        }
 
     return (
         <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroup>
+                <SidebarGroupLabel>Home</SidebarGroupLabel>
                 <SidebarGroupContent className="flex flex-col gap-2">
                     <SidebarMenu>
                         {items.map((item) => (
