@@ -2,17 +2,17 @@
 
 import { authClient } from "@/lib/auth-client";
 import { MembersTable } from '@/components/admin/members-table';
+import type { Member, User, Organization, OrganizationRole } from '@workspace/db'
 
-interface Member {
-    userId: string;
-    role: string;
-    organization: string;
-    organizationId: string;
-    joinedAt: string;
+type AllMembers = Member & {
+    user: User,
+    organization: Organization & {
+        OrganizationRole: OrganizationRole[];
+    }
 }
 
 interface FilteredMembersTableProps {
-    allMembers: Member[];
+    allMembers: AllMembers[]
 }
 
 export function FilteredMembersTable({ allMembers }: FilteredMembersTableProps) {
@@ -25,10 +25,35 @@ export function FilteredMembersTable({ allMembers }: FilteredMembersTableProps) 
 
     // Transform to match MembersTable interface (remove organizationId and organization fields)
     const membersForTable = filteredMembers.map(member => ({
-        id: member.userId,
+        id: member.id,
+        userId: member.userId,
         role: member.role,
-        joinedAt: member.joinedAt,
+        joinedAt: member.createdAt.toISOString(),
+        username: member.user.nickname || member.user.username || undefined,
+        permissions: member.organization.OrganizationRole
+            .filter(orgRole =>{
+                // Accounting for multiple roles
+                const memberRoles = member.role.split(',').map(r => r.trim());
+               return memberRoles.includes(orgRole.role);
+            })
+            .flatMap(orgRole => {
+            try {
+                const parsed = JSON.parse(orgRole.permission);
+                // Convert to array of objects with category and permission
+                return Object.entries(parsed).flatMap(([category, perms]) =>
+                    (perms as string[]).map(perm => ({
+                        category,
+                        permission: perm
+                    }))
+                );
+            } catch (error) {
+                console.error('Error parsing permissions:', error);
+                return [];
+            }
+        })
     }));
+
+    console.log('Permission Members:', membersForTable);
 
     return <MembersTable members={membersForTable} />;
 }

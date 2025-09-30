@@ -25,6 +25,10 @@ model User {
     image              String?
     createdAt          DateTime            @default(now())
     updatedAt          DateTime            @updatedAt
+    role               String?
+    banned             Boolean?            @default(false)
+    banReason          String?
+    banExpires         DateTime?
     Merit              Merit[]
     nameChangeRequests NameChangeRequest[]
     accounts           Account[]
@@ -47,6 +51,7 @@ model Session {
     userId               String
     activeOrganizationId String?
     activeTeamId         String?
+    impersonatedBy       String?
 
     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -142,6 +147,7 @@ model Organization {
     Invitation       Invitation[]
     OrganizationRole OrganizationRole[]
 
+    @@unique([slug])
     @@map("organization")
     @@schema("nexus")
 }

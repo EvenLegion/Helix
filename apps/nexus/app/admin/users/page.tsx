@@ -1,4 +1,3 @@
-import { getCurrentUser } from '@/server/users'
 import { getOrganizations } from 'server/organizations'
 
 import {
@@ -10,7 +9,7 @@ import {
     DialogTrigger,
 } from '@workspace/ui/components/dialog'
 import { Button } from '@workspace/ui/components/button'
-import { CreateOrganizationForm } from '@/components/forms/user/create-organization-form'
+import { CreateOrganizationDialog } from '@/components/admin/create-organization-dialog'
 import { CreateRoleForm } from '@/components/forms/user/create-role-form'
 import {
     Card,
@@ -20,23 +19,30 @@ import {
 } from '@workspace/ui/components/card'
 import { FilteredMembersTable } from '@/components/admin/filtered-members-table'
 import ActiveOrg  from '@/components/admin/active-org'
+import { prisma } from '@workspace/db'
 
 export default async function Dashboard() {
     const userOrgs = await getOrganizations();
-    const { currentUser } = await getCurrentUser();
-
-    console.log(currentUser);
-
     const organizations = userOrgs?.Member?.map(member => member.organization) || [];
 
-    // Include organizationId for filtering
-    const allMembers = userOrgs?.Member?.map(member => ({
-        userId: member.userId,
-        role: member.role,
-        organization: member.organization.name,
-        organizationId: member.organization.id, // Add this for filtering
-        joinedAt: member.createdAt.toISOString(),
-    })) || [];
+    // Fetch all members for these organizations
+    const members = await prisma.member.findMany({
+        where: {
+            organizationId: {
+                in: organizations.map(org => org.id)
+            }
+        },
+        include: {
+            user: true,
+            organization: {
+                include: {
+                    OrganizationRole: true,
+                }
+            }
+        }
+    })
+
+    console.log(members);
 
     // TODO: Make page uniformed create subpage for organizations and roles
     return (
@@ -50,23 +56,10 @@ export default async function Dashboard() {
                     <ActiveOrg organizations={organizations}/>
                 </CardContent>
             </Card>
+            <CreateOrganizationDialog />
             <Dialog>
                 <DialogTrigger asChild>
-                    <Button className="mt-8">Create New Organization</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Create New Organization</DialogTitle>
-                        <DialogDescription>
-                            Create a new organization to manage your projects and teams.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <CreateOrganizationForm />
-                </DialogContent>
-            </Dialog>
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button className="mt-8 ml-4">Create Roles</Button>
+                    <Button className="mt-8 ml-4">Create New Role</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
@@ -78,8 +71,21 @@ export default async function Dashboard() {
                     <CreateRoleForm />
                 </DialogContent>
             </Dialog>
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Button className="mt-8 ml-4">Manage Roles</Button>
+                </DialogTrigger>
+                <DialogContent className="md:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Manage Role</DialogTitle>
+                        <DialogDescription>
+                            Manage a role to modify their permissions in the organization.
+                        </DialogDescription>
+                    </DialogHeader>
+                </DialogContent>
+            </Dialog>
             <Card className="mt-8 w-full">
-                <FilteredMembersTable allMembers={allMembers} />
+                <FilteredMembersTable allMembers={ members } />
             </Card>
         </div>
         </>

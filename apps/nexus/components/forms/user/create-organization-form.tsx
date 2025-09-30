@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { authClient } from "@/lib/auth-client"
 import { toast } from "sonner"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { z } from "zod"
 
@@ -26,8 +27,13 @@ const formSchema = z.object({
     slug: z.string().min(2).max(50),
 })
 
-export function CreateOrganizationForm() {
+interface CreateOrganizationFormProps {
+    onSuccess?: () => void;
+}
+
+export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -44,6 +50,9 @@ export function CreateOrganizationForm() {
                 slug: values.slug,
             })
             toast.success("Organization created successfully!")
+            form.reset();
+            router.refresh();
+            onSuccess?.();
         } catch (error) {
             console.error(error);
             toast.error("Failed to create organization.")

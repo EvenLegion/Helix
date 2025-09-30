@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
+import { organization, admin } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
@@ -33,12 +33,13 @@ export const auth = betterAuth({
         organization({
             ac,
             roles: {
-                owner
+                owner,
             },
             dynamicAccessControl: {
                 enabled: true,
-            }
+            },
         }),
+        admin(),
         nextCookies(),
     ],
     user: {
