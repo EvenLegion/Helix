@@ -2,6 +2,7 @@ import type { ChatInputCommandContext, CommandData } from "commandkit";
 import { AttachmentBuilder, MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
 import { computeLevelForUser } from "../../services/rankSync.ts";
+import { resolveDisplayName, resolveUserNameMap } from "../../services/nameResolver.ts";
 import * as os from "node:os";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -36,23 +37,13 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // Resolve a display name (prefer DB nickname/preferredName/username, then guild display, then username)
-    let displayName = targetUser.username;
-    try {
-      const u = await prisma.user.findUnique({
-        where: { id: targetId },
-        select: { nickname: true, preferredName: true, username: true },
-      });
-      if (u) {
-        displayName = (u.nickname || u.preferredName || u.username || displayName || targetId).trim();
-      }
-    } catch { /* ignore DB name lookup errors */ }
-    if (interaction.guild) {
-      try {
-        const m = await interaction.guild.members.fetch(targetId);
-        displayName = (m.nickname || (m as any).displayName || m.user?.username || displayName || targetId).toString();
-      } catch { /* ignore guild fetch errors */ }
-    }
+    // Resolve a display name using centralized helper
+    const displayName = await resolveDisplayName({
+      client: interaction.client,
+      guild: interaction.guild ?? undefined,
+      userId: targetId,
+      fallbackUsername: targetUser.username,
+    });
 
     // Compute total merits and level (rank)
     const { merits, level } = await computeLevelForUser(targetId);
@@ -77,7 +68,6 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
       where: { userID: targetId },
       orderBy: { id: "desc" },
       select: {
-        id: true,
         merits: true,
         description: true,
         additionalNotes: true,
@@ -87,41 +77,11 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 
     // Resolve awarder names: DB first, then guild members, then global user fetch
     const awarderIds = Array.from(new Set(entries.map(e => e.awardedBy).filter((v): v is string => !!v)));
-    const awarderNameMap = new Map<string, string>();
-
-    if (awarderIds.length) {
-      try {
-        const dbUsers = await prisma.user.findMany({
-          where: { id: { in: awarderIds } },
-          select: { id: true, nickname: true, preferredName: true, username: true },
-        });
-        for (const u of dbUsers) {
-          const name = (u.nickname || u.preferredName || u.username || u.id).trim();
-          awarderNameMap.set(u.id, name);
-        }
-      } catch { /* ignore */ }
-
-      const unresolvedAfterDb = awarderIds.filter(id => !awarderNameMap.has(id));
-      if (unresolvedAfterDb.length && interaction.guild) {
-        try {
-          const fetched = await interaction.guild.members.fetch({ user: unresolvedAfterDb });
-          for (const [id, m] of fetched) {
-            const name = (m.nickname || (m as any).displayName || m.user?.username || id).toString();
-            awarderNameMap.set(id, name);
-          }
-        } catch { /* ignore guild fetch */ }
-      }
-
-      const stillUnresolved = awarderIds.filter(id => !awarderNameMap.has(id));
-      for (const id of stillUnresolved) {
-        try {
-          const u = await interaction.client.users.fetch(id);
-          awarderNameMap.set(id, u.username || id);
-        } catch {
-          awarderNameMap.set(id, id);
-        }
-      }
-    }
+    const awarderNameMap = await resolveUserNameMap({
+      client: interaction.client,
+      guild: interaction.guild ?? undefined,
+      userIds: awarderIds,
+    });
 
     // Build CSV
     const csvHeader = "merits,description,awardedBy";
