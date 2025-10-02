@@ -24,6 +24,8 @@ import {
 } from "@workspace/ui/components/dialog";
 import { X } from "lucide-react";
 
+//  TODO: Add filtering and sorting capabilities to the table
+
 export function MembersTable({
     members,
 }: {
@@ -40,7 +42,6 @@ export function MembersTable({
     const router = useRouter();
     const {data: session} = authClient.useSession();
     //Hovered State for badges
-    const [hoveredRole, setHoveredRole] = useState<string | null>(null);
     const [roleToRemove, setRoleToRemove] = useState<{ memberId: string; role: string } | null>(null); // Changed type
 
     // Group permissions by category
@@ -110,6 +111,13 @@ export function MembersTable({
         setRoleToRemove(null);
     }
 
+    // Define colors for different roles
+    const roleColors: Record<string, string> = {
+        owner: "bg-[#760a0b] text-white border-[#760a0b]",
+        administrator: "bg-[#604d00] text-white border-[#604d00]",
+        imperator: "bg-[#303069] text-white border-[#303069]",
+    }
+
     return (
         <Table>
             <TableCaption>List of organization members</TableCaption>
@@ -136,26 +144,21 @@ export function MembersTable({
                             <TableCell>
                                 <div className="flex flex-wrap gap-1">
                                     {roles.map((role, idx) => (
-                                        <div
+                                        <Badge
                                             key={idx}
-                                            className="relative group"
-                                            onMouseEnter={() => setHoveredRole(`${member.userId}-${role}`)}
-                                            onMouseLeave={() => setHoveredRole(null)}
+                                            variant="outline"
+                                            className={`text-xs flex items-center gap-1 pr-1 capitalize leading-none ${roleColors[role]}`}
                                         >
-                                            <Badge key={idx} variant="outline" className="text-xs">
+                                            <div className=" flex items-center leading-none">
                                                 {role}
-                                            </Badge>
-                                            {hoveredRole === `${member.userId}-${role}` && (
-                                                <button
-                                                    onClick={() => setRoleToRemove({ memberId: member.id, role })}
-                                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-destructive hover:text-destructive/80 transition-colors"
-                                                >
-                                                    <div className="bg-background rounded-full p-0.5">
-                                                        <X className="h-3 w-3" />
-                                                    </div>
-                                                </button>
-                                            )}
-                                        </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setRoleToRemove({ memberId: member.id, role })} // Set role to remove on click
+                                                className="text-muted-foreground transition-colors hover:bg-destructive rounded-full p-0.5 flex items-center justify-center"
+                                            >
+                                                <X color="white" className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
                                         ))}
                                     <Dialog>
                                         <DialogTrigger asChild>
