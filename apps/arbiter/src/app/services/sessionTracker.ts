@@ -23,9 +23,11 @@ const rootInactivityNotified = new Set<number>();
 // Speaking detection is non-trivial via discord.js; speaking events require a voice receiver/bot in channel.
 // For now, we approximate speaking as "unmuted and not deafened". Can be replaced with proper audio/speaking integration later.
 const SAMPLE_SECONDS = 15;
+const DEV_INACTIVITY_MINUTES = 0.5;
+const PROD_INACTIVITY_MINUTES = 30;
 const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_ENV || "").toLowerCase())
   || String(process.env.EVENT_INACTIVITY_DEV || "").toLowerCase() === "1";
-const DEFAULT_INACTIVITY_MINUTES = IS_DEV ? .5 : 30;
+const DEFAULT_INACTIVITY_MINUTES = IS_DEV ? DEV_INACTIVITY_MINUTES : PROD_INACTIVITY_MINUTES;
 const INACTIVITY_MINUTES = Number(process.env.EVENT_INACTIVITY_MINUTES || DEFAULT_INACTIVITY_MINUTES);
 const INACTIVITY_MS = INACTIVITY_MINUTES * 60_000;
 // Notification channel name: allow env override; default to 'commands' in dev, 'bot-requests' otherwise
