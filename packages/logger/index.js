@@ -6,6 +6,8 @@ function isProd() {
 
 function createTransport() {
     if (isProd()) return undefined;
+    // Only enable pretty logging if LOG_PRETTY is not set to "false"
+    if (process.env.LOG_PRETTY === "false") return undefined;
     try {
         return pino.transport({
             target: "pino-pretty",
