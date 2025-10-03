@@ -1,5 +1,5 @@
 // Use the generated Prisma client from this package to ensure models/types match our schema output
-import { PrismaClient } from '../generated/prisma/index.js'
+import { PrismaClient, Prisma } from '../generated/prisma/index.js'
 import { withAccelerate } from '@prisma/extension-accelerate'
 
 // Env helpers
@@ -12,16 +12,18 @@ const shouldLogModel = (model?: string) => !MODEL_FILTER.length || (model ? MODE
 
 const createPrismaClient = () => {
     // Always include a log property to satisfy types; we switch between event and empty array
-    const logConfig = LOG_EVENTS
+    const logConfig: (Prisma.LogDefinition | Prisma.LogLevel)[] = LOG_EVENTS
         ? ([
             { emit: 'event', level: 'query' },
             { emit: 'event', level: 'warn' },
             { emit: 'event', level: 'error' },
             { emit: 'event', level: 'info' },
-        ] as const)
-        : ([] as any);
+        ])
+        : ([]);
 
-    const client = new PrismaClient({ log: logConfig } as any).$extends(withAccelerate());
+    // Configure base client first so $on/$use typings are preserved
+    const base = new PrismaClient({ log: logConfig });
+
     // Config banner
     console.log(
         `[Prisma:cfg] events=${LOG_EVENTS ? 'on' : 'off'} mw=${LOG_MW ? 'on' : 'off'} slow>${SLOW_MS}ms` +
@@ -30,49 +32,48 @@ const createPrismaClient = () => {
 
     // Event-based logging (prints raw SQL and params)
     if (LOG_EVENTS) {
-        (client as any).$on('query', (e: any) => {
-            // Note: Prisma query events may not include model; we log regardless of model filter
+        base.$on('query', (e: Prisma.QueryEvent) => {
             const tag = e.duration > SLOW_MS ? 'SLOW' : 'OK';
             console.log(`[Prisma:event][${tag}] ${e.duration}ms ${e.query}`);
             if (e.params && e.params !== '[]') console.log(`  params: ${e.params}`);
         });
-        (client as any).$on('warn', (e: any) => console.warn('[Prisma:warn]', e.message));
-        (client as any).$on('error', (e: any) => console.error('[Prisma:error]', e.message));
-        (client as any).$on('info', (e: any) => console.log('[Prisma:info]', e.message));
+        base.$on('warn', (e: Prisma.LogEvent) => console.warn('[Prisma:warn]', e.message));
+        base.$on('error', (e: Prisma.LogEvent) => console.error('[Prisma:error]', e.message));
+        base.$on('info', (e: Prisma.LogEvent) => console.log('[Prisma:info]', e.message));
     }
 
     // Middleware-based logging (summarized reads/writes with timing)
     if (LOG_MW) {
-        (client as any).$use(async (params: any, next: any) => {
-            if (!shouldLogModel(params?.model)) {
+        (base as any).$use(async (params: any, next: any) => {
+            if (!shouldLogModel((params as { model?: string })?.model)) {
                 return next(params);
             }
             const start = Date.now();
+            const result = await next(params);
+            const ms = Date.now() - start;
+            const action = String((params as any)?.action || 'unknown');
+            const model = String((params as any)?.model || 'unknown');
+            const tag = ms > SLOW_MS ? 'SLOW' : 'OK';
+            const WRITE = new Set(['create', 'createMany', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany']);
+            const READ = new Set(['findUnique', 'findFirst', 'findMany', 'aggregate', 'count', 'groupBy']);
+            const kind = WRITE.has(action) ? 'WRITE' : READ.has(action) ? 'READ' : 'OTHER';
+            let size = '';
             try {
-                const result = await next(params);
-                const dur = Date.now() - start;
-                const action: string = params?.action;
-                const model: string | undefined = params?.model;
-                const WRITE = new Set(['create', 'createMany', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany']);
-                const READ = new Set(['findUnique', 'findFirst', 'findMany', 'aggregate', 'count', 'groupBy']);
-                const kind = WRITE.has(action) ? 'WRITE' : READ.has(action) ? 'READ' : 'OTHER';
-                const tag = dur > SLOW_MS ? 'SLOW' : 'OK';
-                let size = '';
-                if (Array.isArray(result)) size = ` size=${result.length}`;
-                else if (result && typeof result === 'object') {
-                    if ('count' in result && typeof (result as any).count === 'number') size = ` count=${(result as any).count}`;
+                if (Array.isArray(result)) size = ` rows=${result.length}`;
+                if (result && typeof result === 'object' && 'count' in (result as Record<string, unknown>)) {
+                    const c = (result as Record<string, unknown>)['count'];
+                    if (typeof c === 'number') size = ` count=${c}`;
                 }
-                const whereKeys = params?.args?.where ? Object.keys(params.args.where).join(',') : '';
-                console.log(`[Prisma:mw][${tag}] ${dur}ms ${kind} ${model}.${action}${whereKeys ? ` where=[${whereKeys}]` : ''}${size}`);
-                return result;
-            } catch (err) {
-                const dur = Date.now() - start;
-                console.error(`[Prisma:mw][ERR] ${dur}ms ${params?.model}.${params?.action}`, err);
-                throw err;
+            } catch { }
+            if (shouldLogModel(model)) {
+                console.log(`[Prisma:mw][${tag}] ${ms}ms ${kind} ${model}.${action}${size}`);
             }
+            return result;
         });
     }
 
+    // Apply extensions last
+    const client = base.$extends(withAccelerate());
     return client;
 };
 

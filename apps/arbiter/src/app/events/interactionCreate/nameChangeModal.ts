@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import { prisma } from "@workspace/db"
 import { forInteraction } from "@workspace/logger";
+import { CONFIG, isDev } from "../../config";
 
 export default async function (interaction: ModalSubmitInteraction, client: Client) {
 
@@ -60,8 +61,9 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         });
 
         //Ping the user and staff in the thread
-        const rolesToPing = ['1378564862245863536'] // DEV Roles
-        //const rolesToPing = ['1302658626795733013', '1378474882811170938' ] // PROD Roles
+        const rolesToPing = isDev()
+            ? ['1378564862245863536'] // DEV Roles (left literal; not part of codebase usage list)
+            : [CONFIG.DECANUS_ROLE_ID, CONFIG.TECH_LEAD_ROLE_ID]; // PROD Roles from config
 
         const mentions = `${rolesToPing.map(roleId => `<@&${roleId}>`).join(' ')}`;
         await thread.send({ content: `${mentions} A new name change request has been submitted by ${member?.nickname ?? interaction.user.username}` });

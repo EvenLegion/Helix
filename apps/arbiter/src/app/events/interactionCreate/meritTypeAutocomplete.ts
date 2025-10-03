@@ -8,11 +8,14 @@ export default async function (interaction: Interaction, client: Client) {
   const focused = interaction.options.getFocused(true);
   if (!focused || focused.name !== 'merit_type') return;
 
-  const log = forInteraction(interaction).child({ mod: 'eventStart', sub: 'autocomplete', field: 'merit_type' });
+  const log = forInteraction(interaction).child({ mod: 'meritType', sub: 'autocomplete', field: 'merit_type' });
   const query = String(focused.value ?? '').toLowerCase().trim();
-  log.debug({ query }, 'Autocomplete merit_type query');
+  const cmd = (interaction as any).commandName as string | undefined;
+  log.debug({ query, cmd }, 'Autocomplete merit_type query');
+  // For /event -> only isEvent types; for /add-merit -> any type
+  const where = cmd === 'event' ? { isEvent: true } : {};
   // Fetch up to 25 merit types (Discord limit) and filter by name/description/value
-  const types = await prisma.meritType.findMany({ orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }], take: 50 });
+  const types = await prisma.meritType.findMany({ where, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }], take: 50 });
   const items = types
     .map(t => ({
       id: t.id,

@@ -1,10 +1,11 @@
 import { MiddlewareContext, stopMiddlewares } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { forInteraction } from "@workspace/logger";
+import { CONFIG } from "../../config";
 
 // Only Staff role should be able to run /rank commands (unless in dev mode)
 // Staff role ID: 1364287451576930326
-const STAFF_ROLE_ID = "1364287451576930326";
+const STAFF_ROLE_ID = CONFIG.STAFF_ROLE_ID;
 
 export async function beforeExecute(ctx: MiddlewareContext) {
   const { interaction } = ctx;

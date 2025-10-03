@@ -36,8 +36,8 @@ export const command: CommandData = {
           autocomplete: true,
         },
         {
-          name: "description",
-          description: "Description to store on the event and use for awarded merits (5–255 chars)",
+          name: "event_title",
+          description: "Event title to store on the event and use for awarded merits (5–255 chars)",
           type: 3, // STRING
           required: true,
           min_length: 5,
@@ -137,8 +137,8 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   // Note: do not early-return here; each subcommand will handle missing targetVcId with better guidance
 
   if (sub === "start") {
-    // Load MeritType choices for validation/display
-    const types = await prisma.meritType.findMany({ orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
+    // Load MeritType choices for validation/display (only event types)
+    const types = await prisma.meritType.findMany({ where: { isEvent: true }, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
     if (!types.length) {
       log.warn("No MeritType rows found; prompting user to populate");
       return interaction.reply({ content: 'No MeritType entries exist. Please populate MeritType first.', flags: MessageFlags.Ephemeral });

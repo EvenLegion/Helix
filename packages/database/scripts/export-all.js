@@ -55,6 +55,7 @@ async function main() {
     const DivisionMembership = await prisma.divisionMembership.findMany({ orderBy: { id: 'asc' } });
     await exportModel('divisionMembership', DivisionMembership);
 
+    // Ordering by userID because sometimes we want to visually scan the json files for a specific user
     const Merit = await prisma.merit.findMany({ orderBy: { userID: 'asc' } });
     await exportModel('merit', Merit);
 

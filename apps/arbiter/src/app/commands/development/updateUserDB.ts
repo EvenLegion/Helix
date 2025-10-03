@@ -2,6 +2,8 @@ import type { CommandData, ChatInputCommandContext } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
 import { forInteraction } from "@workspace/logger";
+import { CONFIG } from "../../config";
+import { ensureGuild, replyGuildRequired } from "../../utils/interactions";
 
 export const command: CommandData = {
     name: 'import-users',
@@ -10,17 +12,11 @@ export const command: CommandData = {
 
 export async function chatInput({ interaction }: ChatInputCommandContext) {
     const log = forInteraction(interaction).child({ mod: 'dev', cmd: 'import-users' });
-    const guild = interaction.guild;
+    try { ensureGuild(interaction); } catch { return replyGuildRequired(interaction); }
+    const guild = interaction.guild!;
 
-    if (!guild) {
-        return interaction.reply({
-            content: 'This command can only be used in a server.',
-            flags: MessageFlags.Ephemeral,
-        });
-    }
-
-    // const ROLE_ID = '1352350908385853541'; // Legionnaire
-    const ROLE_ID = '1378564784370225252'; // @everyone for dev
+    // Configure via env: defaults to everyone in dev, else specific role
+    const ROLE_ID = process.env.IMPORT_USERS_ROLE_ID ?? CONFIG.STAFF_ROLE_ID;
 
     await guild.members.fetch();
 
@@ -63,13 +59,9 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             })
         }
 
-        await interaction.editReply({
-            content: "User database has been updated with the latest information.",
-        });
+        await interaction.editReply({ content: "User database has been updated with the latest information." });
     } catch (error) {
         log.error({ err: error }, 'Error updating user database');
-        await interaction.editReply({
-            content: `There was an error updating the user database: ${error}`,
-        });
+        await interaction.editReply({ content: "There was an error updating the user database." });
     }
 }

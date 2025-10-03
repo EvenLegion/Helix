@@ -120,6 +120,7 @@ model MeritType {
   updatedAt          DateTime       @updatedAt
   eventSessions      EventSession[]
   merit              Merit[]
+  isEvent            Boolean        @default(false) // True if this type is used for event sessions
 
   @@map("meritType")
   @@schema("arbiter")

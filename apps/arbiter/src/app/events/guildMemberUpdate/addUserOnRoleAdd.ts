@@ -3,7 +3,8 @@ import { prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
 
 // Target role that triggers user upsert when added
-const TARGET_ROLE_ID = "1352350908385853541";
+import { CONFIG } from "../../config";
+const TARGET_ROLE_ID = CONFIG.LEGIONNAIRE_ROLE_ID;
 
 export default async function (oldMember: GuildMember | any, newMember: GuildMember) {
     const log = childLogger({ mod: 'guildMemberUpdate', event: 'roleAdd', guildId: newMember.guild.id, userId: newMember.user.id });
