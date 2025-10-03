@@ -1,7 +1,7 @@
 import { Client, Interaction, MessageFlags } from "discord.js";
 import { getState, updatePage, clearState } from "../../services/rankReviewStore.ts";
 import { buildRankReviewMessage } from "../../ui/rankReview.ts";
-import { syncNicknameAuto, syncNicknameForDivision } from "../../services/rankSync.ts";
+import { syncNicknameAndSummarize } from "../../services/nicknameSync";
 
 export default async function (interaction: Interaction, client: Client) {
     if (!interaction.isButton()) return;
@@ -62,16 +62,13 @@ export default async function (interaction: Interaction, client: Client) {
         for (const entry of state.entries) {
             try {
                 if (!entry.willChange) { noChange++; continue; }
-                const res = state.meta.divisionCode
-                    ? await syncNicknameForDivision({ guild, userID: entry.userId, divisionCode: state.meta.divisionCode })
-                    : await syncNicknameAuto({ guild, userID: entry.userId });
-                if (res?.reason === 'division_hidden') hidden++;
-                else if (res?.reason === 'member_not_found') notInGuild++;
-                else if (res?.reason === 'missing_permissions_bypassed') bypass++;
-                else if (res?.reason === 'error') errors++;
-                else if (res && 'applied' in res) {
-                    if (res.applied) applied++; else noChange++;
-                } else noChange++;
+                const { outcome } = await syncNicknameAndSummarize({ guild, userID: entry.userId, divisionCode: state.meta.divisionCode });
+                if (outcome.kind === 'applied') { if (outcome.applied) applied++; else noChange++; }
+                else if (outcome.kind === 'skip') {
+                    if (outcome.reason === 'division_hidden') hidden++;
+                    else if (outcome.reason === 'member_not_found') notInGuild++;
+                    else if (outcome.reason === 'missing_permissions_bypassed') bypass++;
+                } else if (outcome.kind === 'error') { errors++; }
             } catch { errors++; }
         }
         clearState(scopeKey);

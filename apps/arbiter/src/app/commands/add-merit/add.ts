@@ -2,6 +2,7 @@ import type { ChatInputCommandContext, CommandData } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
 import { forInteraction } from "@workspace/logger";
+import { syncNicknameAndSummarize } from "../../services/nicknameSync";
 
 export const command: CommandData = {
   name: "add-merit",
@@ -73,8 +74,16 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
       },
     });
 
+    // Attempt to sync nickname decorations after award
+    let syncNote = '';
+    try {
+      const guild = interaction.guild!;
+      const { message } = await syncNicknameAndSummarize({ guild, userID: user.id });
+      syncNote = ` Nickname: ${message}.`;
+    } catch { }
+
     log.info({ awardedTo: user.id, merits, typeId: chosen.id, id: created.id }, "Merit awarded");
-    return interaction.editReply({ content: `Awarded ${merits} merit(s) of type "${chosen.name}" to <@${user.id}>. Entry #${created.id}` });
+    return interaction.editReply({ content: `Awarded ${merits} merit(s) of type "${chosen.name}" to <@${user.id}>. Entry #${created.id}.${syncNote}`.trim() });
   } catch (e: any) {
     log.error({ err: e }, "Failed to award merit");
     const msg = `Failed to award merit: ${String(e?.message ?? e)}`;

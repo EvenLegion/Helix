@@ -22,7 +22,7 @@ const rootInactivityNotified = new Set<number>();
 // Simple sampling approach: every SAMPLE_SECONDS, count present members and increment totals.
 // Speaking detection is non-trivial via discord.js; speaking events require a voice receiver/bot in channel.
 // For now, we approximate speaking as "unmuted and not deafened". Can be replaced with proper audio/speaking integration later.
-const SAMPLE_SECONDS = 15;
+const SAMPLE_SECONDS = 60;
 const DEV_INACTIVITY_MINUTES = 0.5;
 const PROD_INACTIVITY_MINUTES = 15;
 const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_ENV || "").toLowerCase())

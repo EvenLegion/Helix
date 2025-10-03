@@ -3,7 +3,7 @@ import { prisma } from "@workspace/db";
 import { setSelection, getAllSelections, clearReviewState } from "../../services/reviewStore.ts";
 import { getPageNames, setPageNames, clearNamesForSession } from "../../services/nameCache.ts";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
-import { syncNicknameAuto } from "../../services/rankSync.ts";
+import { syncNicknameAndSummarize } from "../../services/nicknameSync";
 import { forInteraction } from "@workspace/logger";
 import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 
@@ -219,26 +219,17 @@ export default async function (interaction: Interaction, client: Client) {
       if (guild) {
         for (const uid of awardedUserIds) {
           try {
-            const res: any = await syncNicknameAuto({ guild, userID: uid });
-            if (res?.reason === 'missing_permissions_bypassed') {
+            const { outcome, message } = await syncNicknameAndSummarize({ guild, userID: uid });
+            if (outcome.kind === 'skip' && outcome.reason === 'division_hidden') {
+              // hidden division: no summary line
+            } else if (outcome.kind === 'skip' && outcome.reason === 'missing_permissions_bypassed') {
               syncSummaries.push(`<@${uid}>: dev bypass (no Manage Nicknames/role hierarchy)`);
-            } else if (res?.reason === 'member_not_found') {
+            } else if (outcome.kind === 'skip' && outcome.reason === 'member_not_found') {
               syncSummaries.push(`<@${uid}>: not in guild`);
-            } else if (res?.reason === 'division_hidden') {
-              // hidden divisions intentionally do not apply nicknames
-            } else if (res?.reason === 'error') {
-              const isMissing = res?.errorCode === 50013 || String(res?.error ?? '').includes('Missing Permissions');
-              if (isMissing) {
-                const detail = res?.permDetail === 'role_hierarchy'
-                  ? 'blocked by role hierarchy'
-                  : (res?.permDetail === 'missing_manage_nicknames' ? 'bot lacks Manage Nicknames' : 'Missing Permissions');
-                syncSummaries.push(`<@${uid}>: error 50013 ${detail} (set DEV_ALLOW_NICK_EDIT=1 to bypass in dev)`);
-              } else {
-                syncSummaries.push(`<@${uid}>: error ${res.errorCode ?? ''} ${res.error ?? ''}`.trim());
-              }
-            } else if (res && 'applied' in res) {
-              if (res.applied) syncSummaries.push(`<@${uid}>: ${res.before} → ${res.after}`);
-              else syncSummaries.push(`<@${uid}>: no change`);
+            } else if (outcome.kind === 'error') {
+              syncSummaries.push(`<@${uid}>: error ${message}`);
+            } else if (outcome.kind === 'applied') {
+              syncSummaries.push(`<@${uid}>: ${message}`);
             }
           } catch (e: any) {
             syncSummaries.push(`<@${uid}>: error ${String(e?.message ?? e)}`);

@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import { prisma } from "@workspace/db";
 import { forInteraction } from "@workspace/logger";
+import { syncNicknameAndSummarize } from "../../services/nicknameSync";
 
 export default async function (interaction: ButtonInteraction, client: Client) {
     // Check if the interaction is a button interaction
@@ -63,6 +64,12 @@ export default async function (interaction: ButtonInteraction, client: Client) {
                 await prisma.user.update({ where: { id: request.userId }, data: { preferredName: request.requestedName, nickname: request.requestedName } })
             }
 
+            // Attempt to sync nickname decorations based on merits/division rules
+            try {
+                const { message } = await syncNicknameAndSummarize({ guild: interaction.guild!, userID: request.userId });
+                await interaction.followUp({ content: `Nickname sync: ${message}.`, flags: MessageFlags.Ephemeral });
+            } catch { }
+
             // Archive the thread
             const thread = await interaction.channel?.fetch();
             if (thread && thread.isThread()) {
@@ -96,6 +103,12 @@ export default async function (interaction: ButtonInteraction, client: Client) {
                 if (user) {
                     await prisma.user.update({ where: { id: request.userId }, data: { preferredName: request.requestedName, nickname: request.requestedName } });
                 }
+
+                // Attempt to sync nickname decorations even in dev-bypass case (will summarize outcome)
+                try {
+                    const { message } = await syncNicknameAndSummarize({ guild: interaction.guild!, userID: request.userId });
+                    await interaction.followUp({ content: `Nickname sync: ${message}.`, flags: MessageFlags.Ephemeral });
+                } catch { }
 
                 const thread = await interaction.channel?.fetch();
                 if (thread && thread.isThread()) {
