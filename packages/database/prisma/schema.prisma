@@ -24,6 +24,8 @@ model User {
   nameChangeRequests NameChangeRequest[]
   accounts           Account[]
   sessions           Session[]
+  divisionMemberships DivisionMembership[]
+  eventSessionParticipants EventSessionParticipant[]
 
   @@schema("nexus")
 }
@@ -164,6 +166,7 @@ model EventSessionParticipant {
   lastSpeakAt          DateTime?
   updatedAt            DateTime     @updatedAt
   session              EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
+  user                 User         @relation(fields: [userId], references: [id])
 
   @@unique([eventSessionId, userId])
   @@map("eventSessionParticipant")
@@ -233,6 +236,7 @@ model DivisionMembership {
   nicknameSyncStatus       String?
   notes                    String?
   division                 Division  @relation(fields: [divisionId], references: [id])
+  user                     User      @relation(fields: [userId], references: [id])
 
   @@unique([userId, divisionId])
   @@index([userId])
