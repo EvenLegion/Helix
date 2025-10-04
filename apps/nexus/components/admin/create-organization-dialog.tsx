@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
     Dialog,
     DialogContent,
@@ -14,11 +15,17 @@ import { CreateOrganizationForm } from '@/components/forms/user/create-organizat
 
 export function CreateOrganizationDialog() {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
+
+    const handleSuccess = () => {
+        setOpen(false);
+        router.refresh();
+    };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="mt-8">Create New Organization</Button>
+                <Button className="p-4">Create New Organization</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
@@ -27,7 +34,7 @@ export function CreateOrganizationDialog() {
                         Create a new organization to manage your projects and teams.
                     </DialogDescription>
                 </DialogHeader>
-                <CreateOrganizationForm onSuccess={() => setOpen(false)} />
+                <CreateOrganizationForm onSuccess={handleSuccess} />
             </DialogContent>
         </Dialog>
     );

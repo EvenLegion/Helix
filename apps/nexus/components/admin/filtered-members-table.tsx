@@ -55,5 +55,5 @@ export function FilteredMembersTable({ allMembers }: FilteredMembersTableProps) 
 
     console.log('Permission Members:', membersForTable);
 
-    return <MembersTable members={membersForTable} />;
+    return <MembersTable members={membersForTable} organizationName={activeOrg?.name} />;
 }

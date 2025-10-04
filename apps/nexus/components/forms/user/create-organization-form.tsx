@@ -45,10 +45,18 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
             setIsLoading(true);
-            await authClient.organization.create({
+            const result = await authClient.organization.create({
                 name: values.name,
                 slug: values.slug,
             })
+
+            // Set the newly created organization as active
+            if (result.data) {
+                await authClient.organization.setActive({
+                    organizationId: result.data.id,
+                });
+            }
+
             toast.success("Organization created successfully!")
             form.reset();
             router.refresh();

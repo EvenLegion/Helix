@@ -12,6 +12,14 @@ export interface MenuGroup {
     items: MenuItem[];
 }
 
+// Page-specific header titles (optional overrides)
+export const pageHeaders: Record<string, string> = {
+    '/admin/users': 'User Management',
+    '/admin/dashboard': 'Admin Dashboard',
+    '/admin/moderation': 'Moderation Tools',
+    // Add more custom titles as needed
+};
+
 export const menuItems = {
     navMain: [
         {
@@ -61,6 +69,18 @@ export function getMenuItemByPath(pathname: string): MenuItem | undefined {
         if (item.url !== '/' && pathname.startsWith(item.url)) return true
         return false
     })
+}
+
+// Get page header title with fallback to menu item title
+export function getPageHeader(pathname: string): string {
+    // First check for page-specific override
+    if (pageHeaders[pathname]) {
+        return pageHeaders[pathname];
+    }
+
+    // Fall back to menu item title
+    const menuItem = getMenuItemByPath(pathname);
+    return menuItem?.title || 'Page';
 }
 
 // Alternative structure with group titles for more complex sidebar layouts

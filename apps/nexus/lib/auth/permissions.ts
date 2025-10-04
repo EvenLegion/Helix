@@ -7,6 +7,7 @@ const statement = {
     member: ['create', 'update', 'delete'],
     organization: ['update', 'delete'],
     invitation: ['create', 'cancel'],
+    recruitment: ['accept', 'reject', 'update', 'delete']
 } as const;
 
 const ac = createAccessControl(statement);
@@ -17,6 +18,7 @@ const owner = ac.newRole({
     member: ['create', 'update', 'delete'],
     organization: ['update', 'delete'],
     invitation: ['create', 'cancel'],
+    recruitment: ['accept', 'reject', 'update', 'delete']
 });
 
 export { ac, owner, statement };

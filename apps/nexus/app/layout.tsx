@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/navigation/app-sidebar";
 import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { SiteHeader } from "@/components/navigation/site-header";
 
 
 export const metadata: Metadata = {
@@ -22,9 +23,16 @@ export default function RootLayout({ children } : {children: React.ReactNode}) {
             enableSystem
             disableTransitionOnChange
         >
-            <SidebarProvider>
-                <AppSidebar />
+            <SidebarProvider
+                style={
+                    {
+                        "--sidebar-width": "calc(var(--spacing) * 72)",
+                        "--header-height": "calc(var(--spacing) * 12)",
+                    } as React.CSSProperties
+                }>
+                <AppSidebar varient="inset" />
                 <SidebarInset >
+                    <SiteHeader />
                     <main>
                         {children}
                     </main>

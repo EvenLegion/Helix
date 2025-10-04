@@ -10,12 +10,15 @@ import {
 } from '@workspace/ui/components/dialog'
 import { Button } from '@workspace/ui/components/button'
 import { CreateOrganizationDialog } from '@/components/admin/create-organization-dialog'
+import { CreateNewRoleDialog } from '@/components/admin/create-new-role'
+import { ManageRoleDialog } from '@/components/admin/manage-role'
 import { CreateRoleForm } from '@/components/forms/user/create-role-form'
 import {
     Card,
     CardHeader,
     CardTitle,
-    CardContent
+    CardContent,
+    CardFooter,
 } from '@workspace/ui/components/card'
 import { FilteredMembersTable } from '@/components/admin/filtered-members-table'
 import ActiveOrg  from '@/components/admin/active-org'
@@ -48,42 +51,19 @@ export default async function Dashboard() {
     return (
         <>
         <div className="min-h-svh p-4">
-            <Card className="mt-8 w-full max-w-sm">
+            <Card className="w-full max-w-sm">
                 <CardHeader>
                     <CardTitle>Active Organization</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <ActiveOrg organizations={organizations}/>
                 </CardContent>
+                <CardFooter>
+                    <CreateOrganizationDialog/>
+                </CardFooter>
             </Card>
-            <CreateOrganizationDialog />
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button className="mt-8 ml-4">Create New Role</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Create New Role</DialogTitle>
-                        <DialogDescription>
-                            Create a new role to manage permissions within your organization.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <CreateRoleForm />
-                </DialogContent>
-            </Dialog>
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button className="mt-8 ml-4">Manage Roles</Button>
-                </DialogTrigger>
-                <DialogContent className="md:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Manage Role</DialogTitle>
-                        <DialogDescription>
-                            Manage a role to modify their permissions in the organization.
-                        </DialogDescription>
-                    </DialogHeader>
-                </DialogContent>
-            </Dialog>
+            <CreateNewRoleDialog />
+            <ManageRoleDialog />
             <Card className="mt-8 w-full">
                 <FilteredMembersTable allMembers={ members } />
             </Card>

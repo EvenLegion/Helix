@@ -37,7 +37,7 @@ export default function ActiveOrg({
     }
 
     return (
-        <Select onValueChange={handleOrgChange} defaultValue={activeOrg?.id}>
+        <Select onValueChange={handleOrgChange} value={activeOrg?.id}>
             <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Active Organization" />
             </SelectTrigger>
