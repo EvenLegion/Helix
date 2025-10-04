@@ -14,8 +14,11 @@ export default async function (interaction: Interaction, client: Client) {
   log.debug({ query, cmd }, 'Autocomplete merit_type query');
   // For /event -> only isEvent types; for /add-merit -> any type
   const where = cmd === 'event' ? { isEvent: true } : {};
-  // Fetch up to 50 merit types and filter by value != 0, then by name/description/value; cap to 25 for Discord
-  const types = await prisma.meritType.findMany({ where, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }], take: 50 });
+  // Fetch merit types; keep response capped to 25 (Discord limit)
+  const types = await prisma.meritType.findMany({
+    where,
+    orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }],
+  });
   const items = types
     .map(t => ({
       id: t.id,
