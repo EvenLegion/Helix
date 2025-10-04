@@ -10,21 +10,21 @@ datasource db {
 }
 
 model User {
-  id                 String              @id
-  username           String?
-  nickname           String?
-  preferredName      String?
-  name               String?
-  email              String?
-  emailVerified      Boolean?
-  image              String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  Merit              Merit[]
-  nameChangeRequests NameChangeRequest[]
-  accounts           Account[]
-  sessions           Session[]
-  divisionMemberships DivisionMembership[]
+  id                       String                    @id
+  username                 String?
+  nickname                 String?
+  preferredName            String?
+  name                     String?
+  email                    String?
+  emailVerified            Boolean?
+  image                    String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  Merit                    Merit[]
+  nameChangeRequests       NameChangeRequest[]
+  accounts                 Account[]
+  sessions                 Session[]
+  divisionMemberships      DivisionMembership[]
   eventSessionParticipants EventSessionParticipant[]
 
   @@schema("nexus")

@@ -209,7 +209,19 @@ async function main() {
     EventSessionParticipant.sort((a, b) => (Number.isInteger(a?.id) ? a.id : 0) - (Number.isInteger(b?.id) ? b.id : 0));
     for (const r of EventSessionParticipant) {
         const newEventSessionId = REMAP_PARENTS ? (sessionIdMap.get(r.eventSessionId) ?? r.eventSessionId) : r.eventSessionId;
-        const data = { eventSessionId: newEventSessionId, userId: r.userId, totalSecondsPresent: r.totalSecondsPresent, totalSecondsSpeaking: r.totalSecondsSpeaking, lastJoinAt: toDate(r.lastJoinAt), lastSpeakAt: toDate(r.lastSpeakAt), updatedAt: toDate(r.updatedAt) };
+        const userId = r.userId;
+        if (!userId) continue;
+        // Ensure a corresponding User exists before inserting (older backups may omit some members)
+        await prisma.user.upsert({
+            where: { id: userId },
+            update: {},
+            create: {
+                id: userId,
+                createdAt: toDate(r.lastJoinAt) ?? new Date(),
+                updatedAt: toDate(r.lastJoinAt) ?? new Date(),
+            },
+        });
+        const data = { eventSessionId: newEventSessionId, userId, totalSecondsPresent: r.totalSecondsPresent, totalSecondsSpeaking: r.totalSecondsSpeaking, lastJoinAt: toDate(r.lastJoinAt), lastSpeakAt: toDate(r.lastSpeakAt), updatedAt: toDate(r.updatedAt) };
         await prisma.eventSessionParticipant.upsert({
             where: { eventSessionId_userId: { eventSessionId: newEventSessionId, userId: r.userId } },
             update: data,
