@@ -1,6 +1,6 @@
 import { ChannelType, VoiceChannel, StageChannel } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel, PermissionsBitField } from "discord.js";
-import { prisma } from "@workspace/db";
+import { prisma, Prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
 import { getNotifyInfo, setNotifyInfo } from "../services/notifyStore";
 
@@ -336,33 +336,35 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
         rootInactivityNotified.delete(rootId);
       }
 
-      // Upsert participants and add SAMPLE_SECONDS to presence time for everyone connected
-      for (const [memberId, member] of members) {
-        await prisma.eventSessionParticipant.upsert({
-          where: { eventSessionId_userId: { eventSessionId: sessionId, userId: memberId } },
-          create: {
-            eventSessionId: sessionId,
-            userId: memberId,
-            totalSecondsPresent: SAMPLE_SECONDS,
-            lastJoinAt: now,
-          },
-          update: {
-            totalSecondsPresent: { increment: SAMPLE_SECONDS },
-            lastJoinAt: now,
-          },
-        });
-      }
+      // Batch presence/speaking increments in a single query
+      const speakingSet = new Set(speakingCandidates);
+      const rows = Array.from(members.values()).map((member) => ({
+        userId: member.id,
+        presentIncrement: SAMPLE_SECONDS,
+        speakingIncrement: speakingSet.has(member) ? SAMPLE_SECONDS : 0,
+      }));
 
-      // Naive speaking approximation: increment speaking time for those not self-muted and not server-muted
-      for (const [memberId, member] of members) {
-        const vs = member.voice;
-        const isPotentiallySpeaking = !(vs.selfMute || vs.serverMute || vs.selfDeaf || vs.serverDeaf);
-        if (isPotentiallySpeaking) {
-          await prisma.eventSessionParticipant.update({
-            where: { eventSessionId_userId: { eventSessionId: sessionId, userId: memberId } },
-            data: { totalSecondsSpeaking: { increment: SAMPLE_SECONDS }, lastSpeakAt: now },
-          });
-        }
+      if (rows.length) {
+        const values = rows.map((row) =>
+          Prisma.sql`(${sessionId}, ${row.userId}, ${row.presentIncrement}, ${row.speakingIncrement}, ${now}, ${row.speakingIncrement > 0 ? now : null}, ${now})`
+        );
+
+        const query = Prisma.sql`
+          INSERT INTO "arbiter"."eventSessionParticipant" AS esp
+            ("eventSessionId","userId","totalSecondsPresent","totalSecondsSpeaking","lastJoinAt","lastSpeakAt","updatedAt")
+          VALUES ${Prisma.join(values, ", ")}
+          ON CONFLICT ("eventSessionId","userId") DO UPDATE SET
+            "totalSecondsPresent" = esp."totalSecondsPresent" + EXCLUDED."totalSecondsPresent",
+            "totalSecondsSpeaking" = esp."totalSecondsSpeaking" + EXCLUDED."totalSecondsSpeaking",
+            "lastJoinAt" = EXCLUDED."lastJoinAt",
+            "lastSpeakAt" = CASE
+              WHEN EXCLUDED."totalSecondsSpeaking" > 0 THEN EXCLUDED."lastSpeakAt"
+              ELSE esp."lastSpeakAt"
+            END,
+            "updatedAt" = EXCLUDED."updatedAt";
+        `;
+
+        await prisma.$executeRaw(query);
       }
 
       // If nobody is connected for multiple consecutive ticks, you may choose to end the session automatically.
