@@ -51,9 +51,17 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
       const names = types.slice(0, 25).map(t => t.name).join(", ");
       return interaction.reply({ content: `Invalid merit type. Valid: ${names}${types.length > 25 ? " …" : ""}`, flags: MessageFlags.Ephemeral });
     }
-    const merits = Math.max(0, Number((chosen as any).value ?? 0));
-    if (!merits) {
+    // Allow negative merit values; don't block zero here (autocomplete hides zero), just warn. Reject only if not a number.
+    const merits = Number((chosen as any).value);
+    if (Number.isNaN(merits)) {
       return interaction.reply({ content: `Selected merit type "${chosen.name}" has no configured value.`, flags: MessageFlags.Ephemeral });
+    }
+    if (merits === 0) {
+      log.warn({ typeId: chosen.id, typeName: chosen.name, merits }, "Selected merit type has a 0 value; blocking and informing user.");
+      return interaction.reply({
+        content: `Something went wrong, the merit type "${chosen.name}" has a zero value. Please report this and choose a different merit type.`,
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     if (description.length < 5) {
