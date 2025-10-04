@@ -207,7 +207,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       });
     }
 
-    const descOptRaw = interaction.options.getString('description', true) || '';
+    const descOptRaw = interaction.options.getString('event_title', true) || '';
     const descOpt = descOptRaw.trim().slice(0, 255);
     if (descOpt.length < 5) {
       log.warn("Description shorter than minimum length");
