@@ -47,8 +47,17 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         // Reply to the interaction with a confirmation message
         await interaction.editReply({ content: `We have received your name change request. The requested name is: **${newName}**. The request ID is **${requestId}**` });
 
-        //Send to requests to thread
-        const logChannel = interaction.guild?.channels.cache.get('1388756021790638160') as TextChannel;
+        let rolesToPing: string[];
+        let logChannel: TextChannel;
+
+        //Ping the user and staff in the thread
+        if (process.env.ENVIRONMENT !== 'PRODUCTION') {
+            rolesToPing = ['1378564862245863536' ] // DEV Roles
+            logChannel = interaction.guild?.channels.cache.get('1388756021790638160') as TextChannel; // PROD Channel
+        } else {
+            rolesToPing = ['1302658626795733013', '1378474882811170938' ] // PROD Roles
+            logChannel = interaction.guild?.channels.cache.get('1388782308793778186') as TextChannel; // PROD Channel
+        }
 
         if (!logChannel || logChannel.type !== ChannelType.GuildText) return;
 
@@ -59,7 +68,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
             reason: `Name change request from ${interaction.user.displayName}`,
             type: ChannelType.PublicThread,
         });
-
+      
         //Ping the user and staff in the thread
         const rolesToPing = isDev()
             ? ['1378564862245863536'] // DEV Roles (left literal; not part of codebase usage list)

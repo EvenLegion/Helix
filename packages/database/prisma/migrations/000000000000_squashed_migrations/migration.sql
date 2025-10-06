@@ -1,14 +1,11 @@
 -- CreateSchema
-CREATE SCHEMA
-IF NOT EXISTS "arbiter";
+CREATE SCHEMA IF NOT EXISTS "arbiter";
 
 -- CreateSchema
-CREATE SCHEMA
-IF NOT EXISTS "nexus";
+CREATE SCHEMA IF NOT EXISTS "nexus";
 
 -- CreateTable
-CREATE TABLE "nexus"."user"
-(
+CREATE TABLE "nexus"."User" (
     "id" TEXT NOT NULL,
     "username" TEXT,
     "nickname" TEXT,
@@ -19,12 +16,11 @@ CREATE TABLE "nexus"."user"
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "user_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "nexus"."session"
-(
+CREATE TABLE "nexus"."Session" (
     "id" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "token" TEXT NOT NULL,
@@ -34,12 +30,11 @@ CREATE TABLE "nexus"."session"
     "userAgent" TEXT,
     "userId" TEXT NOT NULL,
 
-    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "nexus"."account"
-(
+CREATE TABLE "nexus"."Account" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
     "providerId" TEXT NOT NULL,
@@ -54,12 +49,11 @@ CREATE TABLE "nexus"."account"
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Account_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "nexus"."verification"
-(
+CREATE TABLE "nexus"."Verification" (
     "id" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
     "value" TEXT NOT NULL,
@@ -67,12 +61,11 @@ CREATE TABLE "nexus"."verification"
     "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3),
 
-    CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Verification_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "arbiter"."name_change_request"
-(
+CREATE TABLE "arbiter"."NameChangeRequest" (
     "id" SERIAL NOT NULL,
     "userId" CHAR(19) NOT NULL,
     "currentName" TEXT NOT NULL,
@@ -84,12 +77,11 @@ CREATE TABLE "arbiter"."name_change_request"
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "name_change_request_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "NameChangeRequest_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "arbiter"."merit"
-(
+CREATE TABLE "arbiter"."Merit" (
     "userID" CHAR(19) NOT NULL,
     "merits" INTEGER NOT NULL,
     "description" VARCHAR(255) NOT NULL,
@@ -99,39 +91,51 @@ CREATE TABLE "arbiter"."merit"
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "type_id" INTEGER NOT NULL,
 
-    CONSTRAINT "merit_pkey" PRIMARY KEY ("userID")
+    CONSTRAINT "Merit_pkey" PRIMARY KEY ("userID")
 );
 
 -- CreateTable
-CREATE TABLE "arbiter"."merit_type"
-(
+CREATE TABLE "arbiter"."MeritType" (
     "id" INTEGER NOT NULL,
     "name" VARCHAR(100) NOT NULL,
     "description" VARCHAR(255) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "merit_type_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "MeritType_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "arbiter"."DiscordRoles" (
+    "id" SERIAL NOT NULL,
+    "role_id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "color" TEXT NOT NULL,
+    "permissions" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "hoist" BOOLEAN NOT NULL,
+    "memberCount" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DiscordRoles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "session_token_key" ON "nexus"."session"("token");
+CREATE UNIQUE INDEX "Session_token_key" ON "nexus"."Session"("token");
 
 -- AddForeignKey
-ALTER TABLE "nexus"."session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "nexus"."Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "nexus"."account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "nexus"."Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arbiter"."name_change_request" ADD CONSTRAINT "name_change_request_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "arbiter"."NameChangeRequest" ADD CONSTRAINT "NameChangeRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "nexus"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arbiter"."merit" ADD CONSTRAINT "merit_type_id_fkey" FOREIGN KEY ("type_id") REFERENCES "arbiter"."merit_type"("id")
-ON DELETE RESTRICT ON
-UPDATE CASCADE;
+ALTER TABLE "arbiter"."Merit" ADD CONSTRAINT "Merit_type_id_fkey" FOREIGN KEY ("type_id") REFERENCES "arbiter"."MeritType"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "arbiter"."merit" ADD CONSTRAINT "merit_userID_fkey" FOREIGN KEY ("userID") REFERENCES "nexus"."user"("id")
-ON DELETE RESTRICT ON
-UPDATE CASCADE;
+ALTER TABLE "arbiter"."Merit" ADD CONSTRAINT "Merit_userID_fkey" FOREIGN KEY ("userID") REFERENCES "nexus"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
