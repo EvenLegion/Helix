@@ -12,6 +12,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@workspace/ui/components/dialog";
+import { AddRole } from "@/components/admin/add-role";
 import { X, ArrowUpDown } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -176,21 +177,7 @@ function RoleBadgeCell({ member }: { member: Member }) {
                         </button>
                     </Badge>
                 ))}
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <Badge variant="secondary" className="text-xs cursor-pointer">
-                            +
-                        </Badge>
-                    </DialogTrigger>
-                    <DialogContent className="md:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Add Role</DialogTitle>
-                            <DialogDescription>
-                                Add a role to the user in the organization.
-                            </DialogDescription>
-                        </DialogHeader>
-                    </DialogContent>
-                </Dialog>
+                <AddRole />
             </div>
             <Dialog open={!!roleToRemove} onOpenChange={(open) => !open && setRoleToRemove(null)}>
                 <DialogContent className="md:max-w-lg">

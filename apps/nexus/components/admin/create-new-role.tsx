@@ -33,3 +33,4 @@ export function CreateNewRoleDialog() {
             </DialogContent>
         </Dialog>
     )
+}
