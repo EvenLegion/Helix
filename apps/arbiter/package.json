@@ -12,14 +12,17 @@
     "format": "prettier --write \"src/**/*.{js,ts}\""
   },
   "dependencies": {
+    "@workspace/db": "workspace:*",
+    "@workspace/logger": "workspace:*",
     "commandkit": "1.2.0-rc.5",
     "discord.js": "^14.22.1",
-    "@workspace/db": "workspace:*"
+    "pino": "^9.11.0",
+    "pino-pretty": "^13.1.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@workspace/typescript-config": "workspace:*",
     "prettier": "^3.6.2",
-    "typescript": "^5.9.2",
-    "@workspace/typescript-config": "workspace:*"
+    "typescript": "^5.9.2"
   }
 }

@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "rimraf .next",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -38,6 +39,7 @@
     "@types/react-dom": "^19.1.7",
     "@workspace/eslint-config": "workspace:^",
     "@workspace/typescript-config": "workspace:*",
+    "rimraf": "^6.0.1",
     "typescript": "^5.9.2"
   }
 }

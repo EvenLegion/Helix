@@ -1,7 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
     "target": "ESNext",
     "moduleResolution": "bundler",
     "module": "Preserve",
@@ -21,9 +24,25 @@
     "jsxImportSource": "commandkit",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@workspace/logger": [
+        "../../packages/logger"
+      ],
+      "@workspace/logger/*": [
+        "../../packages/logger/*"
+      ]
     }
   },
-  "include": ["src", "commandkit.config.ts", "commandkit-env.d.ts"],
-  "exclude": ["dist", "node_modules", ".commandkit"]
+  "include": [
+    "src",
+    "commandkit.config.ts",
+    "commandkit-env.d.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    ".commandkit"
+  ]
 }

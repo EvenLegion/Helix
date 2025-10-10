@@ -1,4 +1,4 @@
-import type {CommandData, ChatInputCommandContext} from "commandkit";
+import type { CommandData, ChatInputCommandContext } from "commandkit";
 import { MessageFlags, AttachmentBuilder } from "discord.js";
 import { prisma } from "@workspace/db";
 
@@ -7,18 +7,18 @@ export const command: CommandData = {
     description: 'Fetches all the roles in the server'
 };
 
-export async function chatInput({ interaction }: ChatInputCommandContext ) {
+export async function chatInput({ interaction }: ChatInputCommandContext) {
 
     const guild = interaction.guild;
 
-    if(!guild) {
+    if (!guild) {
         return interaction.reply({
             content: 'This command can only be used in a server.',
             flags: MessageFlags.Ephemeral,
         });
     }
 
-    await interaction.deferReply({flags: MessageFlags.Ephemeral});
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
         // Fetch all roles in the guild
@@ -29,13 +29,12 @@ export async function chatInput({ interaction }: ChatInputCommandContext ) {
             .sort((a, b) => b.position - a.position) // Sort by position descending
             .map(role => ({
                 name: role.name,
-                role_id: role.id,
+                roleId: role.id,
                 color: role.hexColor,
                 position: role.position,
                 permissions: role.permissions.toArray().join(', '),
                 hoist: role.hoist,
                 memberCount: role.members.size,
-                createdAt: role.createdAt.toISOString(),
             }));
 
         // Writing to database
