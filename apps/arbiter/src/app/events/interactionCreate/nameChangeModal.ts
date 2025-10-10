@@ -70,7 +70,7 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         });
       
         //Ping the user and staff in the thread
-        const rolesToPing = isDev()
+        rolesToPing = isDev()
             ? ['1378564862245863536'] // DEV Roles (left literal; not part of codebase usage list)
             : [CONFIG.DECANUS_ROLE_ID, CONFIG.TECH_LEAD_ROLE_ID]; // PROD Roles from config
 
