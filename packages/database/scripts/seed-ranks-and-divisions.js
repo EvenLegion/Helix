@@ -21,7 +21,7 @@ const divisions = [
     ["LOG", "L.O.G.I.", "industrial", false, "LOG | "],
     ["TRD", "T.R.A.D.E.", "industrial", false, "TRD | "],
     ["ARC", "A.R.C.H.", "industrial", false, "ARC | "],
-    ["RPR", "R.E.A.P.E.R.", "combat", false, "RPR | "],
+    ["RPR", "R.E.A.P.E.R.", "combat", true, "RPR | "],
 ];
 
 async function main() {
