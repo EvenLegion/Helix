@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 // Use the generated Prisma Client local to this package to ensure it matches the current schema (ESM explicit path)
-import { PrismaClient } from '../generated/prisma/index.js';
+import { PrismaClient, Prisma } from '../generated/prisma/index.js';
 
 const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +25,19 @@ async function exportModel(name, rows) {
     console.log(`[Export] Wrote ${rows.length} ${name} row(s) to ${filePath}`);
 }
 
+async function exportIfExists(name, query) {
+    try {
+        const rows = await query();
+        await exportModel(name, rows);
+    } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2021') {
+            console.warn(`[Export] Skipping ${name}: table not found.`);
+            return;
+        }
+        throw err;
+    }
+}
+
 let outDirCache = null;
 function getOutDir() {
     if (!outDirCache) {
@@ -38,50 +51,29 @@ function getOutDir() {
 async function main() {
     console.log('[Export] Starting full export...');
 
-    // Export order: parents first so imports can use simple upserts
-    const MeritType = await prisma.meritType.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('meritType', MeritType);
+    const tables = [
+        // Parents first so imports can use simple upserts
+        { name: 'meritType', query: () => prisma.meritType.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'rankLevel', query: () => prisma.rankLevel.findMany({ orderBy: { level: 'asc' } }) },
+        { name: 'division', query: () => prisma.division.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'user', query: () => prisma.user.findMany({ orderBy: { id: 'asc' } }) },
+        // Dependent tables
+        { name: 'divisionMembership', query: () => prisma.divisionMembership.findMany({ orderBy: { id: 'asc' } }) },
+        // Ordering by userID because sometimes we want to visually scan the json files for a specific user
+        { name: 'merit', query: () => prisma.merit.findMany({ orderBy: { userID: 'asc' } }) },
+        { name: 'eventType', query: () => prisma.eventType.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'event', query: () => prisma.event.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'eventSession', query: () => prisma.eventSession.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'eventSessionParticipant', query: () => prisma.eventSessionParticipant.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'nameChangeRequest', query: () => prisma.nameChangeRequest.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'account', query: () => prisma.account.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'session', query: () => prisma.session.findMany({ orderBy: { id: 'asc' } }) },
+        { name: 'verification', query: () => prisma.verification.findMany({ orderBy: { id: 'asc' } }) },
+    ];
 
-    const RankLevel = await prisma.rankLevel.findMany({ orderBy: { level: 'asc' } });
-    await exportModel('rankLevel', RankLevel);
-
-    const Division = await prisma.division.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('division', Division);
-
-    const User = await prisma.user.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('user', User);
-
-    // Dependent tables
-    const DivisionMembership = await prisma.divisionMembership.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('divisionMembership', DivisionMembership);
-
-    // Ordering by userID because sometimes we want to visually scan the json files for a specific user
-    const Merit = await prisma.merit.findMany({ orderBy: { userID: 'asc' } });
-    await exportModel('merit', Merit);
-
-    const EventType = await prisma.eventType.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('eventType', EventType);
-
-    const Event = await prisma.event.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('event', Event);
-
-    const EventSession = await prisma.eventSession.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('eventSession', EventSession);
-
-    const EventSessionParticipant = await prisma.eventSessionParticipant.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('eventSessionParticipant', EventSessionParticipant);
-
-    const NameChangeRequest = await prisma.nameChangeRequest.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('nameChangeRequest', NameChangeRequest);
-
-    const Account = await prisma.account.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('account', Account);
-
-    const Session = await prisma.session.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('session', Session);
-
-    const Verification = await prisma.verification.findMany({ orderBy: { id: 'asc' } });
-    await exportModel('verification', Verification);
+    for (const { name, query } of tables) {
+        await exportIfExists(name, query);
+    }
 
     console.log(`[Export] Done. Folder: ${getOutDir()}`);
 }
