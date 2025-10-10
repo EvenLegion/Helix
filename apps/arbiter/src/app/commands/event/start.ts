@@ -14,7 +14,7 @@ const IS_DEV = ["development", "dev", "local"].includes(String(process.env.NODE_
   || String(process.env.EVENT_INACTIVITY_DEV || "").toLowerCase() === "1";
 const NOTIFY_CHANNEL_NAME = (process.env.EVENT_NOTIFY_CHANNEL && process.env.EVENT_NOTIFY_CHANNEL.trim().length)
   ? process.env.EVENT_NOTIFY_CHANNEL.trim()
-  : (IS_DEV ? "commands" : "bot-requests");
+  : (IS_DEV ? "commands" : "🤖bot-requests");
 const NOTIFY_CHANNEL_ID = (process.env.EVENT_NOTIFY_CHANNEL_ID && process.env.EVENT_NOTIFY_CHANNEL_ID.trim().length)
   ? process.env.EVENT_NOTIFY_CHANNEL_ID.trim()
   : undefined;
