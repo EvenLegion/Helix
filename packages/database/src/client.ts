@@ -10,6 +10,24 @@ const SLOW_MS = Number(process.env.PRISMA_SLOW_MS ?? '200'); // highlight slow q
 const MODEL_FILTER = (process.env.PRISMA_LOG_MODELS ?? '').split(',').map(s => s.trim()).filter(Boolean);
 const shouldLogModel = (model?: string) => !MODEL_FILTER.length || (model ? MODEL_FILTER.includes(model) : true);
 
+// Latency simulation controls
+const LAT_MS = process.env.PRISMA_LATENCY_MS ? Number(process.env.PRISMA_LATENCY_MS) : undefined; // fixed delay
+const LAT_RANGE = (process.env.PRISMA_LATENCY_RANGE ?? '').split('-').map(s => s.trim()).filter(Boolean).map(Number);
+const LAT_PCT = Number(process.env.PRISMA_LATENCY_PCT ?? '100'); // percentage of queries to delay
+const LAT_MODELS = (process.env.PRISMA_LATENCY_MODELS ?? '').split(',').map(s => s.trim()).filter(Boolean); // optional model allowlist
+const wantLatency = () => (Number.isFinite(LAT_MS) || (LAT_RANGE.length === 2 && LAT_RANGE.every(n => Number.isFinite(n)))) && LAT_PCT > 0;
+const latencyMs = () => {
+    if (Number.isFinite(LAT_MS)) return Math.max(0, Number(LAT_MS));
+    if (LAT_RANGE.length === 2) {
+        const [a, b] = LAT_RANGE as [number, number];
+        const min = Math.max(0, Math.min(a, b));
+        const max = Math.max(min, Math.max(a, b));
+        return Math.floor(min + Math.random() * (max - min + 1));
+    }
+    return 0;
+};
+const shouldDelayModel = (model?: string) => !LAT_MODELS.length || (model ? LAT_MODELS.includes(model) : true);
+
 const createPrismaClient = () => {
     // Always include a log property to satisfy types; we switch between event and empty array
     const logConfig: (Prisma.LogDefinition | Prisma.LogLevel)[] = LOG_EVENTS
@@ -40,6 +58,19 @@ const createPrismaClient = () => {
         base.$on('warn', (e: Prisma.LogEvent) => console.warn('[Prisma:warn]', e.message));
         base.$on('error', (e: Prisma.LogEvent) => console.error('[Prisma:error]', e.message));
         base.$on('info', (e: Prisma.LogEvent) => console.log('[Prisma:info]', e.message));
+    }
+
+    // Optional latency injection (simulate slow cloud DB)
+    if (wantLatency()) {
+        (base as any).$use(async (params: any, next: any) => {
+            const model = String((params as any)?.model || 'unknown');
+            if (!shouldDelayModel(model)) return next(params);
+            if (Math.random() * 100 <= LAT_PCT) {
+                const ms = latencyMs();
+                if (ms > 0) await new Promise(res => setTimeout(res, ms));
+            }
+            return next(params);
+        });
     }
 
     // Middleware-based logging (summarized reads/writes with timing)
@@ -85,7 +116,7 @@ type GlobalPrisma = {
 };
 const globalForPrisma = global as unknown as GlobalPrisma;
 
-const cfgKey = JSON.stringify({ LOG_EVENTS, LOG_MW, SLOW_MS, MODEL_FILTER });
+const cfgKey = JSON.stringify({ LOG_EVENTS, LOG_MW, SLOW_MS, MODEL_FILTER, LAT_MS, LAT_RANGE, LAT_PCT, LAT_MODELS });
 
 if (!globalForPrisma.prisma || globalForPrisma.prismaCfgKey !== cfgKey) {
     globalForPrisma.prisma = createPrismaClient();

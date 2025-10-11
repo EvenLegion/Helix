@@ -530,3 +530,26 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   await interaction.editReply({ content: `You're about to close session ${root!.id} in <#${root!.channelId}>. Closing will stop tracking. Proceed?`, components: [row] });
   return;
 }
+
+// Command-level autocomplete handler to satisfy CommandKit's expectation and avoid warnings
+export async function autocomplete({ interaction }: any) {
+  if (!interaction?.isAutocomplete?.()) return;
+  const focused = interaction.options.getFocused(true);
+  if (!focused || focused.name !== 'merit_type') return;
+  
+  const log = loggerForInteraction(interaction).child({ mod: "event", sub: "autocomplete" });
+  const query = String(focused.value ?? '').toLowerCase().trim();
+  log.debug({ query, field: focused.name }, 'Command-level autocomplete triggered');
+  
+  // Only event types are relevant for this command
+  const types = await prisma.meritType.findMany({ where: { isEvent: true }, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
+  const items = types
+    .map(t => ({ id: t.id, name: t.name, description: t.description, value: Number((t as any).value ?? 0) }))
+    .filter(t => t.value !== 0)
+    .filter(t => !query || t.name.toLowerCase().includes(query) || t.description.toLowerCase().includes(query) || String(t.value).includes(query))
+    .slice(0, 25)
+    .map(t => ({ name: `${t.name} - ${t.description} (${t.value} merits)`.slice(0, 100), value: String(t.id) }));
+  
+  log.debug({ count: items.length }, 'Command-level autocomplete responding');
+  try { await interaction.respond(items); } catch { /* ignore */ }
+}

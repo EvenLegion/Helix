@@ -76,7 +76,18 @@ async function main() {
     // Parents first
     const MeritType = readArray(fp('meritType'), true);
     for (const r of MeritType) {
-        const data = { id: r.id, name: r.name, description: r.description, value: r.value ?? 0, createdAt: toDate(r.createdAt), updatedAt: toDate(r.updatedAt) };
+        const data = {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            value: r.value ?? 0,
+            displayIndex: r.displayIndex ?? 0,
+            minPercentPresent: r.minPercentPresent ?? 0,
+            minPercentNotMuted: r.minPercentNotMuted ?? 0,
+            isEvent: !!r.isEvent,
+            createdAt: toDate(r.createdAt),
+            updatedAt: toDate(r.updatedAt)
+        };
         const exists = await prisma.meritType.findUnique({ where: { id: r.id } });
         if (exists) await prisma.meritType.update({ where: { id: r.id }, data }); else await prisma.meritType.create({ data });
     }
