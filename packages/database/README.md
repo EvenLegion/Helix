@@ -36,6 +36,52 @@ When you edit `packages/database/prisma/schema.prisma`:
 - Prisma CLI and client versions are declared in this package. Keep them in sync to avoid drift.
 - Consumers should not list `@prisma/client` in their deps; rely on `@workspace/db` instead.
 
+## Development Tools
+
+### Artificial Latency Simulation
+For testing interaction timeouts and slow database conditions locally, the client supports configurable latency injection:
+
+**Environment Variables:**
+```bash
+# Fixed delay for all queries
+PRISMA_LATENCY_MS=800
+PRISMA_LATENCY_PCT=100
+
+# Random delay range (min-max in milliseconds)
+PRISMA_LATENCY_RANGE=300-1500
+PRISMA_LATENCY_PCT=60
+
+# Limit to specific Prisma models
+PRISMA_LATENCY_MODELS=User,EventSession,Merit
+```
+
+**Examples:**
+```powershell
+# Simulate slow cloud DB (75% of queries delayed 400-1200ms)
+$env:PRISMA_LATENCY_RANGE='400-1200'; $env:PRISMA_LATENCY_PCT=75; pnpm dev
+
+# Test extreme latency on specific models
+$env:PRISMA_LATENCY_MS=2000; $env:PRISMA_LATENCY_MODELS='EventSession'; pnpm dev
+```
+
+### Enhanced Logging
+Enable detailed operation logging for debugging:
+
+```bash
+# Middleware-based summary (recommended)
+PRISMA_LOG_MW=1
+PRISMA_SLOW_MS=200
+
+# Raw SQL events with parameters (verbose)
+PRISMA_LOG_EVENTS=1
+
+# Filter logs to specific models
+PRISMA_LOG_MODELS=EventSession,Merit
+```
+
+The logging shows operation type (READ/WRITE), model, action, duration, and result size.
+
 ## Troubleshooting
-- “Property X does not exist on type PrismaClient”: ensure the consumer imports types from `@workspace/db` and has rebuilt after schema changes.
+- "Property X does not exist on type PrismaClient": ensure the consumer imports types from `@workspace/db` and has rebuilt after schema changes.
 - Wrong database at runtime: print `process.env.DATABASE_URL` in the app (before importing `@workspace/db`), check for OS-level overrides, and confirm `.env` is loaded.
+- Auto-increment conflicts after import: run `pnpm --filter @workspace/db exec node scripts/reset-sequences.js` to sync PostgreSQL sequences with actual data.
