@@ -1,6 +1,7 @@
 import { GuildMember } from "discord.js";
 import { prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
+import { ensureDiscordUser } from "../../utils/ensureUsers";
 
 // Target role that triggers user upsert when added
 import { CONFIG } from "../../config";
@@ -18,31 +19,7 @@ export default async function (oldMember: GuildMember | any, newMember: GuildMem
 
         // Only act when the role is newly added
         if (hasRole && !hadRole) {
-            const user = newMember.user;
-            const profile = {
-                id: user.id,
-                username: user.username ?? null,
-                nickname: newMember.nickname ?? null,
-                name: newMember.displayName ?? null,
-                image: user.displayAvatarURL ? user.displayAvatarURL() : null,
-            } as const;
-
-            await prisma.user.upsert({
-                where: { id: profile.id },
-                update: {
-                    username: profile.username ?? undefined,
-                    nickname: profile.nickname ?? undefined,
-                    name: profile.name ?? undefined,
-                    image: profile.image ?? undefined,
-                },
-                create: {
-                    id: profile.id,
-                    username: profile.username,
-                    nickname: profile.nickname,
-                    name: profile.name,
-                    image: profile.image,
-                },
-            });
+            await ensureDiscordUser(newMember, "roleAdd");
         }
     } catch (err) {
         log.error({ err }, "Failed to upsert user on role add");

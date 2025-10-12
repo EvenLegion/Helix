@@ -12,6 +12,7 @@ import {
 import { prisma } from "@workspace/db"
 import { forInteraction } from "@workspace/logger";
 import { CONFIG, isDev } from "../../config";
+import { ensureDiscordUser } from "../../utils/ensureUsers";
 
 export default async function (interaction: ModalSubmitInteraction, client: Client) {
 
@@ -23,6 +24,9 @@ export default async function (interaction: ModalSubmitInteraction, client: Clie
         const member = await interaction.guild?.members.fetch(userID);
         const currentName = member?.nickname ?? interaction.user.username;
         const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided';
+
+        // Ensure the user exists in the database before creating a name change request
+        await ensureDiscordUser(interaction.user, "nameChangeRequest");
 
         const nameChangeRequest = await prisma.nameChangeRequest.create({
             data: {

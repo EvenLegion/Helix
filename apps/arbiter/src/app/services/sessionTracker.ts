@@ -3,6 +3,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel, Permiss
 import { prisma, Prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
 import { getNotifyInfo, setNotifyInfo } from "../services/notifyStore";
+import { ensureDiscordUsers } from "../utils/ensureUsers";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
@@ -349,6 +350,10 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       }));
 
       if (rows.length) {
+        // Ensure all Discord users exist in the database before inserting participant records
+        const memberArray = Array.from(members.values());
+        await ensureDiscordUsers(memberArray, "sessionTracker");
+
         const values = rows.map((row) =>
           Prisma.sql`(${sessionId}, ${row.userId}, ${row.presentIncrement}, ${row.speakingIncrement}, ${now}, ${row.speakingIncrement > 0 ? now : null}, ${now})`
         );
