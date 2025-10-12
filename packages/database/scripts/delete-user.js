@@ -1,18 +1,22 @@
 // Delete a specific user and all related records
-// Usage: node ./scripts/delete-user.js <userId>
-// Set CONFIRM_DELETE=1 to actually delete, otherwise runs in dry-run mode
+// Usage: node ./scripts/delete-user.js <userId> [--confirm_delete]
+// Set CONFIRM_DELETE=1 or use --confirm_delete flag to actually delete, otherwise runs in dry-run mode
 import { PrismaClient } from "../generated/prisma/index.js";
 
 const prisma = new PrismaClient();
 
 const main = async () => {
-    const userId = process.argv[2];
-    const DRY_RUN = String(process.env.CONFIRM_DELETE ?? '') !== '1';
+    const args = process.argv.slice(2);
+    const userId = args[0];
+    const hasConfirmFlag = args.includes('--confirm_delete');
+    const hasConfirmEnv = String(process.env.CONFIRM_DELETE ?? '') === '1';
+    const DRY_RUN = !hasConfirmFlag && !hasConfirmEnv;
     
-    if (!userId) {
-        console.error("Usage: node delete-user.js <userId>");
+    if (!userId || userId.startsWith('--')) {
+        console.error("Usage: node delete-user.js <userId> [--confirm_delete]");
         console.error("Example: node delete-user.js 123456789012345678");
-        console.error("Set CONFIRM_DELETE=1 to actually delete (otherwise dry-run)");
+        console.error("Example: node delete-user.js 123456789012345678 --confirm_delete");
+        console.error("Or set CONFIRM_DELETE=1 to actually delete (otherwise dry-run)");
         process.exit(1);
     }
     
