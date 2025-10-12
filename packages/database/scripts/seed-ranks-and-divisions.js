@@ -16,12 +16,17 @@ const divisions = [
     ["SPR", "S.P.E.A.R.", "combat", true, "SPR | "],
     ["HVK", "H.A.V.O.K.", "combat", true, "HVK | "],
     ["RFT", "R.A.F.T.", "combat", true, "RFT | "],
+    ["RPR", "R.E.A.P.E.R.", "combat", true, "RPR | "],
     ["DRL", "D.R.I.L.L.", "industrial", false, "DRL | "],
     ["SCR", "S.C.R.A.P.", "industrial", false, "SCR | "],
     ["LOG", "L.O.G.I.", "industrial", false, "LOG | "],
     ["TRD", "T.R.A.D.E.", "industrial", false, "TRD | "],
     ["ARC", "A.R.C.H.", "industrial", false, "ARC | "],
-    ["RPR", "R.E.A.P.E.R.", "combat", true, "RPR | "],
+    ["SEC", "Security", "staff", false, "SEC | "],
+    ["ADMR", "Admiral", "staff", false, "ADMR | "],
+    ["CMDR", "Commander", "staff", false, "CMDR | "],
+    ["TECH", "Tech Dept.", "staff", false, "TECH | "],
+    ["EXEC", "Executive", "staff", false, "EXEC | "]
 ];
 
 async function main() {
