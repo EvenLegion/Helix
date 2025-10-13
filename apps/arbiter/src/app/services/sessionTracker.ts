@@ -3,6 +3,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type TextChannel, Permiss
 import { prisma, Prisma } from "@workspace/db";
 import { childLogger } from "@workspace/logger";
 import { getNotifyInfo, setNotifyInfo } from "../services/notifyStore";
+import { ensureDiscordUsers } from "../utils/ensureUsers";
 
 const activeTimers = new Map<number, NodeJS.Timeout>();
 const prevMembersBySession = new Map<number, Set<string>>();
@@ -264,20 +265,24 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
   // Start inactivity watcher (group-wide on root)
   lastActivityBySession.set(sessionId, Date.now());
   if (!inactivityWatchers.has(rootId)) {
-    const watcher = setInterval(async () => {
-      const last = lastGroupActivityByRoot.get(rootId) || 0;
-      const elapsed = Date.now() - last;
-      log.debug({ rootId, last, elapsedMs: elapsed, thresholdMs: INACTIVITY_MS, thresholdMin: INACTIVITY_MINUTES }, "Group inactivity check");
-      if (elapsed > INACTIVITY_MS) {
-        log.info("Group inactivity threshold reached; notifying leadership once for root");
-        const rootVc = rootChannelIdByRoot.get(rootId) || vcId;
-        await notifyInactivity(client, guildId, rootId, rootVc);
-        rootInactivityNotified.add(rootId);
-        clearInterval(watcher);
-        inactivityWatchers.delete(rootId);
-      }
-      // VC deletion is handled in tick below
-    }, 60_000);
+    // Delay the inactivity watcher by 30 seconds to avoid race condition with tick timer
+    const watcher = setTimeout(() => {
+      const intervalWatcher = setInterval(async () => {
+        const last = lastGroupActivityByRoot.get(rootId) || 0;
+        const elapsed = Date.now() - last;
+        log.debug({ rootId, last, elapsedMs: elapsed, thresholdMs: INACTIVITY_MS, thresholdMin: INACTIVITY_MINUTES }, "Group inactivity check");
+        if (elapsed > INACTIVITY_MS) {
+          log.info("Group inactivity threshold reached; notifying leadership once for root");
+          const rootVc = rootChannelIdByRoot.get(rootId) || vcId;
+          await notifyInactivity(client, guildId, rootId, rootVc);
+          rootInactivityNotified.add(rootId);
+          clearInterval(intervalWatcher);
+          inactivityWatchers.delete(rootId);
+        }
+        // VC deletion is handled in tick below
+      }, 60_000);
+      inactivityWatchers.set(rootId, intervalWatcher);
+    }, 30_000);
     inactivityWatchers.set(rootId, watcher);
   }
 
@@ -345,6 +350,10 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       }));
 
       if (rows.length) {
+        // Ensure all Discord users exist in the database before inserting participant records
+        const memberArray = Array.from(members.values());
+        await ensureDiscordUsers(memberArray, "sessionTracker");
+
         const values = rows.map((row) =>
           Prisma.sql`(${sessionId}, ${row.userId}, ${row.presentIncrement}, ${row.speakingIncrement}, ${now}, ${row.speakingIncrement > 0 ? now : null}, ${now})`
         );

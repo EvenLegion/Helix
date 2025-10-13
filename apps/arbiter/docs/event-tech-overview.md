@@ -121,6 +121,24 @@ Last updated: 2025-09-24
 - Debug verbosity is controlled solely by the logger level; extra ad-hoc gating removed to keep diagnostics rich when LOG_LEVEL=debug.
 - Review UI now shows total time present, total speaking, and participation %. Default selection remains at ≥ 20% presence.
 
+## Recent fixes (Oct 2025)
+
+### Discord Interaction Timeout Handling
+- **Issue**: "Unknown interaction" errors when event review operations took >3 seconds
+- **Fix**: Implemented `safeUpdate()` pattern in `eventReview.ts` using `deferUpdate()` + `editReply()`
+- **Impact**: Event review buttons work reliably under slow database conditions
+
+### Session Tracker Race Condition
+- **Issue**: False inactivity notifications when voice activity was present
+- **Root cause**: Inactivity watcher and tick timer started simultaneously, causing checks before activity updates
+- **Fix**: Added 30-second offset to inactivity watcher startup in `sessionTracker.ts`
+- **Impact**: Inactivity alerts only fire when channels are truly inactive
+
+### Autocomplete Reliability  
+- **Issue**: Autocomplete failures under network latency causing interaction errors
+- **Fix**: Added defensive error handling for expired autocomplete interactions
+- **Impact**: Graceful handling of rapid typing and network delays
+
 ## Notes for reviewers
 - Speaking-time is approximated; can be swapped for a more precise method if voice receivers are allowed.
 - In-memory review/name caches are process-local; if multi-instance, consider a shared store.

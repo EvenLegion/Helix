@@ -2,6 +2,7 @@ import { prisma } from "@workspace/db";
 import type { GuildMember } from "discord.js";
 import { PermissionsBitField } from "discord.js";
 import { childLogger } from "@workspace/logger";
+import { ensureUsersByIds } from "../utils/ensureUsers";
 
 const CIRCLED_1_TO_50: string[] = [
 	"①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
@@ -192,6 +193,8 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 					try {
 						const existing = await prisma.divisionMembership.findFirst({ where: { userId: userID, divisionId: parsed.division.id } });
 						if (!existing) {
+							// Ensure the user exists before creating division membership
+							await ensureUsersByIds([userID], "rankSync");
 							await prisma.divisionMembership.create({ data: { userId: userID, divisionId: parsed.division.id, lastComputedAt: new Date() } });
 						}
 					} catch { /* ignore */ }

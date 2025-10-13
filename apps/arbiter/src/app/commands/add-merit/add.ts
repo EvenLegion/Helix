@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
 import { forInteraction } from "@workspace/logger";
 import { syncNicknameAndSummarize } from "../../services/nicknameSync";
+import { ensureDiscordUser } from "../../utils/ensureUsers";
 
 export const command: CommandData = {
   name: "add-merit",
@@ -69,6 +70,10 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    // Ensure both the recipient and the awarder exist in the database
+    await ensureDiscordUser(user, "addMerit");
+    await ensureDiscordUser(interaction.user, "addMerit");
 
     // Create merit
     const created = await prisma.merit.create({

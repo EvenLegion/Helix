@@ -7,6 +7,7 @@ import { startChannelCleanupWatcher } from "../../services/channelCleanup";
 import { buildEventReviewMessage } from "../../ui/eventReview.ts";
 import { upsertReviewState, getReviewStateKey } from "../../services/reviewStore.ts";
 import { getMeritMinSpeakingPct, getMeritMinPresentPct, getMeritMinPresentPctOverride, getMeritMinSpeakingPctOverride } from "../../services/eventConfig";
+import { ensureUsersByIds } from "../../utils/ensureUsers";
 
 // Mirror the Centurion requirement used by /event middleware (with admin bypass)
 const CENTURION_ROLE_ID = "1352378365809786970";
@@ -117,6 +118,12 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       if (!cur.lastSpeakAt || (p.lastSpeakAt && p.lastSpeakAt > cur.lastSpeakAt)) cur.lastSpeakAt = p.lastSpeakAt;
       byUser.set(p.userId, cur);
     }
+    // Ensure all users exist before upserting participant records
+    const userIds = Array.from(byUser.keys());
+    if (userIds.length > 0) {
+      await ensureUsersByIds(userIds, "eventClose");
+    }
+    
     for (const [uid, agg] of byUser) {
       await prisma.eventSessionParticipant.upsert({
         where: { eventSessionId_userId: { eventSessionId: root.id, userId: uid } },

@@ -16,5 +16,5 @@ Last updated: 2025-09-24
   - `docs/BOT-COMMANDS-INDEX.md`
 - Dev mode notes
   - `docs/dev-mode.md`
-- Development notes
+- Development notes (includes Discord interaction timeout patterns and Prisma dev tools)
   - `docs/development.md`

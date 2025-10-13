@@ -39,5 +39,14 @@ export default async function (interaction: Interaction, client: Client) {
       value: String(t.id),
     }));
   log.debug({ count: items.length }, 'Autocomplete responding');
-  await interaction.respond(items);
+  try {
+    await interaction.respond(items);
+  } catch (e: any) {
+    // Autocomplete interactions expire quickly; log but don't crash
+    if (e?.code === 10062 || e?.message?.includes('Unknown interaction')) {
+      log.warn({ err: e?.message }, 'Autocomplete token expired (ignored)');
+    } else {
+      log.warn({ err: e }, 'Autocomplete response failed');
+    }
+  }
 }

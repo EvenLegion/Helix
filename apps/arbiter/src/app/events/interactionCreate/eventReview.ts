@@ -1,4 +1,4 @@
-import { Client, MessageFlags, Interaction } from "discord.js";
+import { Client, MessageFlags, Interaction, ButtonInteraction } from "discord.js";
 import { prisma } from "@workspace/db";
 import { setSelection, getAllSelections, clearReviewState } from "../../services/reviewStore.ts";
 import { getPageNames, setPageNames, clearNamesForSession } from "../../services/nameCache.ts";
@@ -10,6 +10,7 @@ import { getNotifyInfo, clearNotifyInfo } from "../../services/notifyStore";
 export default async function (interaction: Interaction, client: Client) {
   // Only handle component interactions with our customId prefix
   if (!interaction.isButton()) return;
+  const btn = interaction as ButtonInteraction;
   const id = interaction.customId;
   if (!id || !id.startsWith("eventrev:")) return;
 
@@ -23,7 +24,7 @@ export default async function (interaction: Interaction, client: Client) {
 
   const action = parts[1];
   const sessionId = Number(parts[2]);
-  const reviewerId = parts[3];
+  const reviewerId: string = parts[3] || interaction.user.id;
 
   // Only the original reviewer can interact
   if (interaction.user.id !== reviewerId) {
@@ -31,10 +32,33 @@ export default async function (interaction: Interaction, client: Client) {
   }
 
   // Helper to rebuild and update the ephemeral message
+  const safeUpdate = async (data: any) => {
+    try {
+      // If not yet acknowledged, acknowledge quickly to avoid token expiry
+      if (!btn.deferred && !btn.replied) {
+        await btn.deferUpdate();
+      }
+    } catch {}
+    try {
+      return await btn.editReply(data as any);
+    } catch (e) {
+      // Fallback to update if still possible and not acknowledged (defensive)
+      if (!btn.deferred && !btn.replied) {
+        return await (btn as any).update(data);
+      }
+      throw e;
+    }
+  };
+
+  // Helper to rebuild and update the ephemeral message
   const rebuild = async (page: number) => {
+    // Defer immediately since the following DB work can exceed 3s
+    if (!btn.deferred && !btn.replied) {
+      try { await btn.deferUpdate(); } catch {}
+    }
     const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     if (!session) {
-      return interaction.update({ content: "Session no longer exists.", components: [], embeds: [] });
+      return safeUpdate({ content: "Session no longer exists.", components: [], embeds: [] });
     }
     const participantsRaw = await prisma.eventSessionParticipant.findMany({
       where: { eventSessionId: sessionId },
@@ -73,14 +97,14 @@ export default async function (interaction: Interaction, client: Client) {
       const dbPreview = users.map(u => [u.id, nameMap.get(u.id)]);
       log.debug({ page, preview: dbPreview }, "DB nameMap preview");
       // Fallbacks from Discord caches for any missing, then override the current page with live guild display names
-      const guild = interaction.guild;
+      const guild = btn.guild;
       for (const uid of ids) {
         if (!nameMap.has(uid) && guild) {
           const m = guild.members.cache.get(uid);
           if (m) nameMap.set(uid, m.displayName || m.user?.username || uid);
         }
         if (!nameMap.has(uid)) {
-          const u = interaction.client.users.cache.get(uid);
+          const u = btn.client.users.cache.get(uid);
           if (u) nameMap.set(uid, u.username);
         }
         if (!nameMap.has(uid)) nameMap.set(uid, uid);
@@ -123,16 +147,16 @@ export default async function (interaction: Interaction, client: Client) {
       minPercentPresent: (mt as any)?.minPercentPresent ?? undefined,
       minPercentNotMuted: (mt as any)?.minPercentNotMuted ?? undefined,
     });
-    await interaction.update(message as any);
+    await safeUpdate(message as any);
   };
 
   if (action === "rb") {
     const userId = parts[4] || '';
     const choice = parts[5] as 'merit' | 'none';
     const page = Number(parts[6] ?? 0);
-    if (!userId) return interaction.reply({ content: "Missing user id in selection.", flags: MessageFlags.Ephemeral });
+    if (!userId) return btn.reply({ content: "Missing user id in selection.", flags: MessageFlags.Ephemeral });
     if (choice !== 'merit' && choice !== 'none') {
-      return interaction.reply({ content: "Invalid selection.", flags: MessageFlags.Ephemeral });
+      return btn.reply({ content: "Invalid selection.", flags: MessageFlags.Ephemeral });
     }
     setSelection(`${sessionId}:${reviewerId}`, userId, choice);
     return rebuild(page);
@@ -146,10 +170,14 @@ export default async function (interaction: Interaction, client: Client) {
   }
 
   if (action === "confirm") {
+    // Acknowledge quickly; we'll edit the original message afterwards
+    if (!btn.deferred && !btn.replied) {
+      try { await btn.deferUpdate(); } catch {}
+    }
     const selections = getAllSelections(`${sessionId}:${reviewerId}`);
     const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     if (!session) {
-      return interaction.update({ content: "Session no longer exists.", components: [], embeds: [] });
+      return safeUpdate({ content: "Session no longer exists.", components: [], embeds: [] });
     }
     let meritType: { id: number; name: string; description: string; value: number } | null = null;
     let awardDescription: string | undefined;
@@ -158,12 +186,13 @@ export default async function (interaction: Interaction, client: Client) {
       where: { id: sessionId },
       include: { meritType: true },
     });
-    if (sessionWithType?.meritType) {
+    if (sessionWithType && sessionWithType.meritType) {
+      const mt = sessionWithType.meritType;
       meritType = {
-        id: sessionWithType.meritType.id,
-        name: sessionWithType.meritType.name,
-        description: sessionWithType.meritType.description,
-        value: (sessionWithType.meritType as any).value ?? 0,
+        id: mt.id,
+        name: mt.name,
+        description: mt.description,
+        value: (mt as any).value ?? 0,
       };
       // Prefer the award description saved on the root session (or this one if root)
       awardDescription = sessionWithType.awardDescription ?? undefined;
@@ -177,7 +206,7 @@ export default async function (interaction: Interaction, client: Client) {
     if (!meritType) {
       clearReviewState(`${sessionId}:${reviewerId}`);
       clearNamesForSession(sessionId);
-      return interaction.update({ content: `No merit type was set for session ${sessionId}. Nothing awarded.`, components: [], embeds: [] });
+      return safeUpdate({ content: `No merit type was set for session ${sessionId}. Nothing awarded.`, components: [], embeds: [] });
     }
     // Normalize selected user IDs and filter to those marked for merit
     const toAward = selections
@@ -215,7 +244,7 @@ export default async function (interaction: Interaction, client: Client) {
     // Attempt nickname sync for awarded users and gather outcomes
     const syncSummaries: string[] = [];
     try {
-      const guild = interaction.guild;
+      const guild = btn.guild;
       if (guild) {
         for (const uid of awardedUserIds) {
           try {
@@ -249,9 +278,9 @@ export default async function (interaction: Interaction, client: Client) {
     try {
       const info = getNotifyInfo(sessionId);
       if (info?.threadId) {
-        const guildId = interaction.guildId || (await prisma.eventSession.findUnique({ where: { id: sessionId } }))?.guildId;
+        const guildId = btn.guildId || (await prisma.eventSession.findUnique({ where: { id: sessionId } }))?.guildId;
         if (guildId) {
-          const guild = await interaction.client.guilds.fetch(guildId);
+          const guild = await btn.client.guilds.fetch(guildId);
           const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
           if (thread && (thread as any).isTextBased?.()) {
             await (thread as any).send(`Session ${sessionId} review complete. ${present.length ? 'Merits were awarded.' : 'No merits were awarded.'}`);
@@ -260,12 +289,12 @@ export default async function (interaction: Interaction, client: Client) {
         clearNotifyInfo(sessionId);
       }
     } catch { /* ignore thread errors */ }
-    return interaction.update({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${descLine}${syncNote}`.trim(), components: [], embeds: [] });
+    return safeUpdate({ content: `Review confirmed for session ${sessionId}. ${summary}${skipped}${descLine}${syncNote}`.trim(), components: [], embeds: [] });
   }
 
   if (action === "nomerits") {
     clearReviewState(`${sessionId}:${reviewerId}`);
     clearNamesForSession(sessionId);
-    return interaction.update({ content: `No merits will be assigned for session ${sessionId}.`, components: [], embeds: [] });
+    return safeUpdate({ content: `No merits will be assigned for session ${sessionId}.`, components: [], embeds: [] });
   }
 }

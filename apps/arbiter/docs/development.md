@@ -47,3 +47,96 @@ Alternatives or additional mitigations:
 - Keep the repo outside of OneDrive-backed paths.
 - Manually delete `.next` when the error occurs (the script automates this).
 - Use a separate working directory for builds (e.g., local temp directory) if desired.
+
+## Discord Interaction Timeout Handling
+
+Discord interactions must be acknowledged within 3 seconds or they expire with "Unknown interaction" errors. For operations that may take longer (database queries, API calls), we implement defensive patterns:
+
+### Button Interactions (Event Review)
+- **File**: `apps/arbiter/src/app/events/interactionCreate/eventReview.ts`
+- **Pattern**: Use `safeUpdate()` helper that calls `deferUpdate()` early, then `editReply()` 
+- **When**: Any button interaction that involves database work or API calls
+
+```typescript
+// Acknowledge quickly, then edit the message later
+if (!interaction.deferred && !interaction.replied) {
+  await interaction.deferUpdate();
+}
+// ... do slow work ...
+await interaction.editReply(content);
+```
+
+### Autocomplete Interactions
+- **File**: `apps/arbiter/src/app/events/interactionCreate/meritTypeAutocomplete.ts`
+- **Pattern**: Wrap `interaction.respond()` in try/catch for graceful timeout handling
+- **Reason**: Users typing quickly can trigger multiple autocomplete requests; late responses fail silently
+
+```typescript
+try {
+  await interaction.respond(items);
+} catch (e) {
+  if (e?.code === 10062) {
+    log.debug('Autocomplete token expired (ignored)');
+  }
+}
+```
+
+## Prisma Development Tools
+
+### Latency Simulation
+For testing interaction timeouts locally, the `@workspace/db` package supports artificial latency injection:
+
+**Environment Variables:**
+```bash
+# Fixed delay for all queries
+PRISMA_LATENCY_MS=800
+PRISMA_LATENCY_PCT=100
+
+# Random delay range  
+PRISMA_LATENCY_RANGE=300-1500
+PRISMA_LATENCY_PCT=60
+
+# Limit to specific models
+PRISMA_LATENCY_MODELS=User,EventSession,Merit
+```
+
+**Usage:**
+```powershell
+# Simulate slow cloud DB (random 400-1200ms delay on 75% of queries)
+$env:PRISMA_LATENCY_RANGE='400-1200'; $env:PRISMA_LATENCY_PCT=75
+pnpm dev
+```
+
+**Implementation**: Middleware in `packages/database/src/client.ts` uses `setTimeout()` before query execution.
+
+### Enhanced Logging
+Enable detailed Prisma operation logging for debugging:
+
+```bash
+# Middleware-based summary (recommended)
+PRISMA_LOG_MW=1
+PRISMA_SLOW_MS=200
+
+# Raw SQL events (verbose)
+PRISMA_LOG_EVENTS=1
+
+# Filter to specific models
+PRISMA_LOG_MODELS=EventSession,Merit
+```
+
+## Database Import/Export Scripts
+
+### Sequence Reset After Import
+When importing data with explicit IDs, PostgreSQL sequences can get out of sync:
+
+```bash
+# After running import-all.js, reset sequences
+pnpm --filter @workspace/db exec node scripts/reset-sequences.js
+```
+
+**What it does**: Sets each auto-increment sequence to `MAX(id) + 1` to prevent duplicate key errors.
+
+### Import Script Fixes
+- **File**: `packages/database/scripts/import-all.js`
+- **Fix**: MeritType imports now include all schema fields (`isEvent`, `displayIndex`, `minPercentPresent`, `minPercentNotMuted`)
+- **Previous issue**: Backup restores were missing these fields, causing autocomplete to show no results
