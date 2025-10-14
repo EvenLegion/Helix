@@ -70,3 +70,5 @@ my-turborepo/
 
 # VS Code editor settings (keep local)
 .vscode/
+
+.github/chatmodes/*
