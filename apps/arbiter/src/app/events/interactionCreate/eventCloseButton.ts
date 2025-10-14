@@ -87,6 +87,13 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     return interaction.reply({ content: "This action can only be performed by the moderator who initiated it.", flags: MessageFlags.Ephemeral });
   }
 
+  // Acknowledge immediately to avoid 3s timeout leading to Unknown interaction
+  try { await interaction.deferUpdate(); } catch { /* ignore if already acknowledged */ }
+
+  const safeEditReply = async (data: any) => {
+    try { return await interaction.editReply(data as any); } catch (e) { try { log.warn({ err: e }, "editReply failed (possibly stale interaction)"); } catch {} }
+  };
+
   // Helper to end the event group and optionally build review state
   const endAndAggregate = async () => {
     const active = await prisma.eventSession.findUnique({ where: { id: sessionId } });
@@ -136,7 +143,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
 
   if (action === "cancel") {
     // Allow the initiator to cancel without elevated permissions
-    return interaction.update({ content: "Close cancelled. Event remains active.", components: [] });
+    return safeEditReply({ content: "Close cancelled. Event remains active.", components: [] });
   }
 
   if (action === "nomerits") {
@@ -156,7 +163,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       isCreator = root?.startedBy === interaction.user.id;
     } catch { /* leave false */ }
     if (!(isAdmin || isCenturion || isAdmiral || isImperator || isCreator)) {
-      return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
+      return safeEditReply({ content: "You don't have permission to close events.", components: [] });
     }
     try {
       const res = await endAndAggregate();
@@ -174,9 +181,9 @@ export default async function (interaction: ButtonInteraction, client: Client) {
         }
       } catch { /* ignore follow-up errors */ }
     } catch (e: any) {
-      return interaction.update({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
+      return safeEditReply({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
     }
-    return interaction.update({ content: `Event closed. No merits awarded.`, components: [] });
+    return safeEditReply({ content: `Event closed. No merits awarded.`, components: [] });
   }
 
   if (action === "confirm") {
@@ -196,7 +203,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       isCreator = rootForPerm?.startedBy === interaction.user.id;
     } catch { /* leave false */ }
     if (!(isAdmin || isCenturion || isAdmiral || isImperator || isCreator)) {
-      return interaction.reply({ content: "You don't have permission to close events.", flags: MessageFlags.Ephemeral });
+      return safeEditReply({ content: "You don't have permission to close events.", components: [] });
     }
     // End and then build review UI
     let root: any; let endIds: number[];
@@ -204,7 +211,7 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       const res = await endAndAggregate();
       root = res.root; endIds = res.endIds as any;
     } catch (e: any) {
-      return interaction.update({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
+      return safeEditReply({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
     }
     // Participants and review defaults (use per-type thresholds)
     const participants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: root.id } });
@@ -288,6 +295,6 @@ export default async function (interaction: ButtonInteraction, client: Client) {
         }
       }
     } catch { /* ignore follow-up errors */ }
-    return interaction.update(message as any);
+    return safeEditReply(message as any);
   }
 }
