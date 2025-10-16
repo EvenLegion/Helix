@@ -7,6 +7,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@workspace/ui/components/dialog';
+import { AddRoleForm } from "@/components/forms/user/add-role"; 
 
 export function AddRole() {
 
@@ -24,6 +25,7 @@ export function AddRole() {
                         Add a role to the user in the organization.
                     </DialogDescription>
                 </DialogHeader>
+                <AddRoleForm />
             </DialogContent>
             </Dialog>
     )
