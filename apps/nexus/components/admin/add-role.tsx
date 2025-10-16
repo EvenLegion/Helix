@@ -19,13 +19,7 @@ export function AddRole() {
                 </Badge>
             </DialogTrigger>
             <DialogContent className="md:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>Add Role</DialogTitle>
-                    <DialogDescription>
-                        Add a role to the user in the organization.
-                    </DialogDescription>
-                </DialogHeader>
-                <AddRoleForm />
+              <AddRoleForm />
             </DialogContent>
             </Dialog>
     )
