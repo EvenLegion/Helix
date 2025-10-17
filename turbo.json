@@ -2,7 +2,7 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "tasks": {
-    "db:generate":{
+    "db:generate": {
       "cache": false
     },
     "db:migrate": {
@@ -13,28 +13,88 @@
       "cache": false
     },
     "build": {
-      "dependsOn": ["^build", "^db:generate"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
+      "dependsOn": [
+        "^build",
+        "^db:generate"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**"
+      ],
+      "env": [
+        "GUILD_ID",
+        "BETTER_AUTH_SECRET",
+        "BASE_URL",
+        "AUTH_DISCORD_ID",
+        "AUTH_DISCORD_SECRET",
+        "NODE_ENV",
+        "DATABASE_URL",
+        "DISCORD_TOKEN"
+      ]
     },
     "arbiter#build": {
-      "dependsOn": ["^build", "^db:generate"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**"],
-      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
+      "dependsOn": [
+        "^build",
+        "^db:generate"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        "dist/**"
+      ],
+      "env": [
+        "GUILD_ID",
+        "BETTER_AUTH_SECRET",
+        "BASE_URL",
+        "AUTH_DISCORD_ID",
+        "AUTH_DISCORD_SECRET",
+        "NODE_ENV",
+        "DATABASE_URL",
+        "DISCORD_TOKEN"
+      ]
+    },
+    "@workspace/db#build": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": [
+        "^lint"
+      ]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": [
+        "^check-types"
+      ]
     },
     "dev": {
-      "dependsOn": ["^db:generate"],
+      "dependsOn": [
+        "^db:generate"
+      ],
       "cache": false,
       "persistent": true,
-      "env": ["GUILD_ID", "BETTER_AUTH_SECRET", "BASE_URL", "AUTH_DISCORD_ID", "AUTH_DISCORD_SECRET", "NODE_ENV", "DATABASE_URL", "DISCORD_TOKEN"]
+      "env": [
+        "GUILD_ID",
+        "BETTER_AUTH_SECRET",
+        "BASE_URL",
+        "AUTH_DISCORD_ID",
+        "AUTH_DISCORD_SECRET",
+        "NODE_ENV",
+        "DATABASE_URL",
+        "DISCORD_TOKEN"
+      ]
     }
   }
 }
