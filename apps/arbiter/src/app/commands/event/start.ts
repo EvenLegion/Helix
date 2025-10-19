@@ -84,6 +84,13 @@ export const command: CommandData = {
           channel_types: [2, 13], // GuildVoice, GuildStageVoice
           required: false,
         },
+        {
+          name: "session",
+          description: "Session ID to stop (alternative to channel)",
+          type: 4, // INTEGER
+          required: false,
+          autocomplete: true,
+        },
       ],
     },
   ],
@@ -137,11 +144,13 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
   // Note: do not early-return here; each subcommand will handle missing targetVcId with better guidance
 
   if (sub === "start") {
+    // Avoid 3s timeout: defer immediately; respond via editReply
+    try { await interaction.deferReply({ ephemeral: true }); } catch { /* ignore if already acknowledged */ }
     // Load MeritType choices for validation/display (only event types)
     const types = await prisma.meritType.findMany({ where: { isEvent: true }, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
     if (!types.length) {
       log.warn("No MeritType rows found; prompting user to populate");
-      return interaction.reply({ content: 'No MeritType entries exist. Please populate MeritType first.', flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: 'No MeritType entries exist. Please populate MeritType first.' });
     }
     // Read chosen merit type (by name or id)
     const meritTypeInput = interaction.options.getString('merit_type', true);
@@ -149,7 +158,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     if (!chosen) {
       log.warn({ input: meritTypeInput }, "Invalid merit type selection");
       const names = types.slice(0, 25).map(t => t.name).join(', ');
-      return interaction.reply({ content: `Invalid merit type. Valid: ${names}${types.length > 25 ? ' …' : ''}`, flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: `Invalid merit type. Valid: ${names}${types.length > 25 ? ' …' : ''}` });
     }
 
     // Optional voice channel argument
@@ -159,7 +168,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         targetVcId = argChannel.id as string;
       } else {
         log.warn({ argType: argChannel.type }, "Non-voice channel provided to 'channel' option");
-        return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: "Please choose a voice or stage channel for the 'channel' option." });
       }
     }
 
@@ -171,7 +180,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       });
       if (existing) {
         log.warn({ targetVcId, existingId: existing.id }, "Duplicate active session for channel");
-        return interaction.reply({ content: `A session is already active for <#${targetVcId}> (session ${existing.id}).`, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `A session is already active for <#${targetVcId}> (session ${existing.id}).` });
       }
     }
 
@@ -201,9 +210,8 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
 
     if (!targetVcId) {
       log.warn("Unable to resolve a target voice channel for start");
-      return interaction.reply({
+      return interaction.editReply({
         content: "Couldn't resolve a voice channel. Run this in the voice channel (or its text channel) or pass the 'channel' option.",
-        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -211,7 +219,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     const descOpt = descOptRaw.trim().slice(0, 255);
     if (descOpt.length < 5) {
       log.warn("Description shorter than minimum length");
-      return interaction.reply({ content: 'Description must be at least 5 characters long.', flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: 'Description must be at least 5 characters long.' });
     }
     const session = await prisma.eventSession.create({
       data: {
@@ -295,10 +303,12 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       log.warn({ err: e }, "Failed to create root session thread");
     }
     startSessionTracker(client, session.id, guild.id, targetVcId);
-    return interaction.reply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).\nDescription: ${descOpt}`, flags: MessageFlags.Ephemeral });
+    return interaction.editReply({ content: `Started tracking in <#${targetVcId}> with merit type "${chosen.name}" (session ${session.id}).\nDescription: ${descOpt}` });
   }
 
   if (sub === "add-vc") {
+    // Avoid 3s timeout: defer immediately; respond via editReply
+    try { await interaction.deferReply({ ephemeral: true }); } catch { /* ignore if already acknowledged */ }
     // Determine the root session to attach to
     // Strategy:
     // 1) If the current channel (or its related VC) has an active session, use that as root
@@ -336,7 +346,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         addTargetVcId = addArgChannel.id as string;
       } else {
         log.warn({ argType: addArgChannel.type }, "Non-voice channel provided to add-vc 'channel' option");
-        return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: "Please choose a voice or stage channel for the 'channel' option." });
       }
     }
 
@@ -357,7 +367,7 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       }
     }
     if (!root) {
-      return interaction.reply({ content: "Couldn't determine which event to add this VC to. Run this from a tracked channel or ensure only one event is active.", flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: "Couldn't determine which event to add this VC to. Run this from a tracked channel or ensure only one event is active." });
     }
 
     // Determine final VC to add: use provided existing channel, or create a new one
@@ -368,9 +378,8 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       const me = guild.members.me ?? await guild.members.fetchMe().catch(() => null);
       if (!me || !me.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
         log.warn("Missing ManageChannels for channel creation");
-        return interaction.reply({
+        return interaction.editReply({
           content: "I don't have permission to create channels. Please grant 'Manage Channels' (or 'Administrator') to my role, or pass an existing channel via the 'channel' option.",
-          flags: MessageFlags.Ephemeral,
         });
       }
       const nameOpt = interaction.options.getString("name", false) || undefined;
@@ -441,12 +450,12 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
         const hint = e?.code === 50013
           ? "I need 'Manage Channels' permission, or use /event add-vc with the 'channel' option to attach an existing channel."
           : "Please ensure I have 'Manage Channels' or try attaching an existing channel with the 'channel' option.";
-        return interaction.reply({ content: `Failed to create a voice channel${code}: ${String(e?.message || e)}\n${hint}`.trim(), flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `Failed to create a voice channel${code}: ${String(e?.message || e)}\n${hint}`.trim() });
       }
     }
 
     if (!finalVcId) {
-      return interaction.reply({ content: "Couldn't resolve or create a voice channel to add.", flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: "Couldn't resolve or create a voice channel to add." });
     }
 
     // Prevent duplicate active session for that channel
@@ -456,10 +465,10 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
       const rootId = root.id;
       if (existingRootId === rootId) {
         log.warn({ finalVcId, existingId: existing.id, rootId }, "Channel already part of current event");
-        return interaction.reply({ content: `That channel <#${finalVcId}> is already part of this event (session ${existing.id}).`, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: `That channel <#${finalVcId}> is already part of this event (session ${existing.id}).` });
       }
       log.warn({ finalVcId, existingRootId, rootId }, "Channel tracked in a different event");
-      return interaction.reply({ content: `That channel <#${finalVcId}> is already being tracked for a different event (session ${existingRootId}).`, flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: `That channel <#${finalVcId}> is already being tracked for a different event (session ${existingRootId}).` });
     }
 
     // Inherit merit type from root
@@ -487,36 +496,63 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
     } catch (e) {
       log.warn({ err: e }, "Failed to announce added session in root thread");
     }
-    const createdSuffix = createdChannel ? " (created new channel)" : "";
-    return interaction.reply({ content: `Added <#${finalVcId}> to event (root session ${root.id}) as session ${child.id}${createdSuffix}.`, flags: MessageFlags.Ephemeral });
+  const createdSuffix = createdChannel ? " (created new channel)" : "";
+  return interaction.editReply({ content: `Added <#${finalVcId}> to event (root session ${root.id}) as session ${child.id}${createdSuffix}.` });
   }
 
   // stop
-  // Optional voice channel argument for stop
+  // Optional arguments for stop: session or channel
+  const stopArgSessionId = interaction.options.getInteger("session", false);
   const stopArgChannel = interaction.options.getChannel("channel", false) as any | null;
-  if (stopArgChannel) {
+
+  let active: any | null = null;
+  if (typeof stopArgSessionId === 'number' && Number.isInteger(stopArgSessionId)) {
+    // Resolve by session id and ensure it's active and in this guild
+    const cand = await prisma.eventSession.findUnique({ where: { id: stopArgSessionId } });
+    if (!cand || cand.guildId !== guild.id) {
+      log.warn({ stopArgSessionId, found: !!cand, matchGuild: cand ? cand.guildId === guild.id : null }, "Invalid session id for stop");
+      return interaction.reply({ content: `Session ${stopArgSessionId} wasn't found in this server.`, flags: MessageFlags.Ephemeral });
+    }
+    if (cand.endedAt) {
+      return interaction.reply({ content: `Session ${stopArgSessionId} is already closed.`, flags: MessageFlags.Ephemeral });
+    }
+    active = cand;
+  } else if (stopArgChannel) {
     if (stopArgChannel.type === ChannelType.GuildVoice || stopArgChannel.type === ChannelType.GuildStageVoice) {
       targetVcId = stopArgChannel.id as string;
     } else {
       log.warn({ argType: stopArgChannel.type }, "Non-voice channel provided to stop 'channel' option");
       return interaction.reply({ content: "Please choose a voice or stage channel for the 'channel' option.", flags: MessageFlags.Ephemeral });
     }
-  }
-
-  if (!targetVcId) {
-    log.warn("Couldn't resolve a voice channel for stop");
-    return interaction.reply({
-      content: "Couldn't resolve a voice channel. Run this in the voice channel (or its text channel) or pass the 'channel' option.",
-      flags: MessageFlags.Ephemeral,
+    if (!targetVcId) {
+      log.warn("Couldn't resolve a voice channel for stop (channel option)");
+      return interaction.reply({ content: "Couldn't resolve that voice channel.", flags: MessageFlags.Ephemeral });
+    }
+    active = await prisma.eventSession.findFirst({
+      where: { guildId: guild.id, channelId: targetVcId, endedAt: null },
+      orderBy: { startedAt: "desc" },
     });
-  }
-  const active = await prisma.eventSession.findFirst({
-    where: { guildId: guild.id, channelId: targetVcId, endedAt: null },
-    orderBy: { startedAt: "desc" },
-  });
-  if (!active) {
-    log.warn({ channelId: targetVcId }, "No active session found for this channel");
-    return interaction.reply({ content: "No active session found for this channel.", flags: MessageFlags.Ephemeral });
+    if (!active) {
+      log.warn({ channelId: targetVcId }, "No active session found for channel option");
+      return interaction.reply({ content: "No active session found for that channel.", flags: MessageFlags.Ephemeral });
+    }
+  } else {
+    // No args: attempt to resolve by context (current VC/category) as before
+    if (!targetVcId) {
+      log.warn("Couldn't resolve a voice channel for stop; consider asking user to use session option");
+      return interaction.reply({
+        content: "Couldn't resolve a channel. Use the 'session' option to pick an open session, or run this in/near the event's channels.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    active = await prisma.eventSession.findFirst({
+      where: { guildId: guild.id, channelId: targetVcId, endedAt: null },
+      orderBy: { startedAt: "desc" },
+    });
+    if (!active) {
+      log.warn({ channelId: targetVcId }, "No active session found for resolved channel");
+      return interaction.reply({ content: "No active session found for this channel.", flags: MessageFlags.Ephemeral });
+    }
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -535,21 +571,50 @@ export async function chatInput({ interaction, client }: ChatInputCommandContext
 export async function autocomplete({ interaction }: any) {
   if (!interaction?.isAutocomplete?.()) return;
   const focused = interaction.options.getFocused(true);
-  if (!focused || focused.name !== 'merit_type') return;
-  
+  if (!focused) return;
+
   const log = loggerForInteraction(interaction).child({ mod: "event", sub: "autocomplete" });
-  const query = String(focused.value ?? '').toLowerCase().trim();
+  const queryRaw = String(focused.value ?? '');
+  const query = queryRaw.toLowerCase().trim();
   log.debug({ query, field: focused.name }, 'Command-level autocomplete triggered');
-  
-  // Only event types are relevant for this command
-  const types = await prisma.meritType.findMany({ where: { isEvent: true }, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
-  const items = types
-    .map(t => ({ id: t.id, name: t.name, description: t.description, value: Number((t as any).value ?? 0) }))
-    .filter(t => t.value !== 0)
-    .filter(t => !query || t.name.toLowerCase().includes(query) || t.description.toLowerCase().includes(query) || String(t.value).includes(query))
-    .slice(0, 25)
-    .map(t => ({ name: `${t.name} - ${t.description} (${t.value} merits)`.slice(0, 100), value: String(t.id) }));
-  
-  log.debug({ count: items.length }, 'Command-level autocomplete responding');
-  try { await interaction.respond(items); } catch { /* ignore */ }
+
+  if (focused.name === 'merit_type') {
+    // Only event types are relevant for this command
+    const types = await prisma.meritType.findMany({ where: { isEvent: true }, orderBy: [{ displayIndex: 'asc' }, { name: 'asc' }] });
+    const items = types
+      .map(t => ({ id: t.id, name: t.name, description: t.description, value: Number((t as any).value ?? 0) }))
+      .filter(t => t.value !== 0)
+      .filter(t => !query || t.name.toLowerCase().includes(query) || t.description.toLowerCase().includes(query) || String(t.value).includes(query))
+      .slice(0, 25)
+      .map(t => ({ name: `${t.name} - ${t.description} (${t.value} merits)`.slice(0, 100), value: String(t.id) }));
+    log.debug({ count: items.length }, 'Autocomplete responding: merit_type');
+    try { await interaction.respond(items); } catch { /* ignore */ }
+    return;
+  }
+
+  if (focused.name === 'session') {
+    // List open sessions in this guild; show channel name if resolvable
+    const guild = interaction.guild;
+    if (!guild) { try { await interaction.respond([]); } catch {} return; }
+    const actives = await prisma.eventSession.findMany({ where: { guildId: guild.id, endedAt: null }, orderBy: { startedAt: 'desc' } });
+    let choices = actives.map(s => ({
+      id: s.id,
+      channelId: s.channelId,
+      desc: (s as any).awardDescription || '',
+      typeId: s.meritTypeId,
+    }));
+    // Attempt to label with channel name
+    const items = choices
+      .map(c => {
+        const ch = guild.channels.cache.get(c.channelId) as any;
+        const name = (ch && ch.name) ? `#${ch.name}` : `<#${c.channelId}>`;
+        const label = `Session ${c.id} — ${name}${c.desc ? ` — ${String(c.desc).slice(0, 50)}` : ''}`;
+        return { name: label.slice(0, 100), value: String(c.id) };
+      })
+      .filter(i => !query || i.name.toLowerCase().includes(query) || i.value === query)
+      .slice(0, 25);
+    log.debug({ count: items.length }, 'Autocomplete responding: session');
+    try { await interaction.respond(items); } catch { /* ignore */ }
+    return;
+  }
 }

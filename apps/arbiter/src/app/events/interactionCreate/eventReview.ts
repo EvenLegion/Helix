@@ -174,12 +174,22 @@ export default async function (interaction: Interaction, client: Client) {
     if (!btn.deferred && !btn.replied) {
       try { await btn.deferUpdate(); } catch {}
     }
+    // Immediately disable UI to reduce user double-clicks while we process
+    try {
+      await btn.editReply({ components: [] });
+    } catch {}
     const selections = getAllSelections(`${sessionId}:${reviewerId}`);
     const session = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     if (!session) {
       return safeUpdate({ content: "Session no longer exists.", components: [], embeds: [] });
     }
-    let meritType: { id: number; name: string; description: string; value: number } | null = null;
+    // If already finalized (possibly due to another moderator), do not proceed
+    try {
+      if ((session as any).reviewFinalizedAt) {
+        return safeUpdate({ content: `This event's review was already finalized by <@${(session as any).reviewFinalizedBy || 'unknown'}>.`, components: [], embeds: [] });
+      }
+    } catch {}
+  let meritType: { id: number; name: string; description: string; value: number } | null = null;
     let awardDescription: string | undefined;
     // Fetch MeritType via Prisma relation (no raw SQL)
     const sessionWithType = await prisma.eventSession.findUnique({
@@ -226,21 +236,66 @@ export default async function (interaction: Interaction, client: Client) {
       log.warn({ sessionId, missing }, "Skipping users not found in DB");
     }
     const notes = `Awarded via event session ${sessionId}`;
+    // Use a transaction with an advisory lock to ensure single-writer per session
     const awardedUserIds: string[] = [];
-    for (const sel of present) {
-      // Always create a new Merit row per award
-      await prisma.merit.create({
-        data: {
-          userID: sel.userId,
-          merits: meritType.value,
-          description: awardDescription || meritType.description,
+    await prisma.$transaction(async (tx) => {
+      try {
+        // pg_advisory_xact_lock on sessionId to serialize concurrent confirms
+        // Use a deterministic 32-bit key; here we just use sessionId directly
+        await (tx as any).$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1)`, sessionId);
+      } catch {}
+      // Filter out users already awarded for this session/type
+      const existing = await tx.merit.findMany({
+        where: {
+          typeId: meritType!.id,
           additionalNotes: notes,
-          awardedBy: reviewerId,
-          typeId: meritType.id,
+          userID: { in: present.map(p => p.userId) },
         },
+        select: { userID: true },
       });
-      awardedUserIds.push(sel.userId);
-    }
+      const already = new Set(existing.map(e => e.userID));
+      const toCreate = present.filter(p => !already.has(p.userId));
+      if (toCreate.length) {
+        // Prefer createMany with skipDuplicates if supported; unique index ensures idempotency
+        try {
+          await (tx.merit as any).createMany({
+            data: toCreate.map(p => ({
+              userID: p.userId,
+              merits: meritType!.value,
+              description: awardDescription || meritType!.description,
+              additionalNotes: notes,
+              awardedBy: reviewerId,
+              typeId: meritType!.id,
+            })),
+            skipDuplicates: true,
+          });
+        } catch {
+          // Fallback to individual creates ignoring unique violations
+          for (const sel of toCreate) {
+            try {
+              await tx.merit.create({
+                data: {
+                  userID: sel.userId,
+                  merits: meritType!.value,
+                  description: awardDescription || meritType!.description,
+                  additionalNotes: notes,
+                  awardedBy: reviewerId,
+                  typeId: meritType!.id,
+                },
+              });
+            } catch {}
+          }
+        }
+        awardedUserIds.push(...toCreate.map(t => t.userId));
+      }
+      // Mark session review finalized (idempotent)
+      try {
+        await tx.eventSession.update({
+          where: { id: sessionId },
+          data: { reviewFinalizedAt: new Date(), reviewFinalizedBy: reviewerId },
+        });
+      } catch {}
+    });
     // Attempt nickname sync for awarded users and gather outcomes
     const syncSummaries: string[] = [];
     try {
@@ -293,6 +348,38 @@ export default async function (interaction: Interaction, client: Client) {
   }
 
   if (action === "nomerits") {
+    // Disable UI and finalize this review as no-merits
+    try { if (!btn.deferred && !btn.replied) { await btn.deferUpdate(); } } catch {}
+    try { await btn.editReply({ components: [] }); } catch {}
+    try {
+      await prisma.$transaction(async (tx) => {
+        try { await (tx as any).$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1)`, sessionId); } catch {}
+        const current = await tx.eventSession.findUnique({ where: { id: sessionId } });
+        if (current && (current as any).reviewFinalizedAt) {
+          // already finalized elsewhere
+          return;
+        }
+        await tx.eventSession.update({
+          where: { id: sessionId },
+          data: { reviewFinalizedAt: new Date(), reviewFinalizedBy: reviewerId },
+        });
+      });
+    } catch {}
+    // Post final follow-up in inactivity thread
+    try {
+      const info = getNotifyInfo(sessionId);
+      if (info?.threadId) {
+        const guildId = btn.guildId || (await prisma.eventSession.findUnique({ where: { id: sessionId } }))?.guildId;
+        if (guildId) {
+          const guild = await btn.client.guilds.fetch(guildId);
+          const thread = await guild.channels.fetch(info.threadId).catch(() => null as any);
+          if (thread && (thread as any).isTextBased?.()) {
+            await (thread as any).send(`Session ${sessionId} review complete. No merits were awarded.`);
+          }
+        }
+        clearNotifyInfo(sessionId);
+      }
+    } catch { /* ignore thread errors */ }
     clearReviewState(`${sessionId}:${reviewerId}`);
     clearNamesForSession(sessionId);
     return safeUpdate({ content: `No merits will be assigned for session ${sessionId}.`, components: [], embeds: [] });

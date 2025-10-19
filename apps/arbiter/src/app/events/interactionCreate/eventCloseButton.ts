@@ -43,14 +43,17 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     if (!active) {
       return interaction.reply({ content: `Session ${sessionId} not found.`, flags: MessageFlags.Ephemeral });
     }
-    if (active.endedAt) {
-      return interaction.reply({ content: `Session ${sessionId} is already ended.`, flags: MessageFlags.Ephemeral });
-    }
+    const root = active.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
+    // If a root exists and review was finalized already, refuse to open a new review flow
+    try {
+      if (root?.reviewFinalizedAt) {
+        return interaction.reply({ content: `This event's review was already finalized by <@${root.reviewFinalizedBy || 'unknown'}>.`, flags: MessageFlags.Ephemeral });
+      }
+    } catch { /* ignore */ }
 
     // Permission: Admin, Centurion, Admiral, Imperator, or the event creator (root.startedBy)
     let isAdmin = false, isCenturion = false, isAdmiral = false, isImperator = false, isCreator = false;
     try {
-      const root = active.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
       const guild = await interaction.client.guilds.fetch(root!.guildId);
       const member = await guild.members.fetch(interaction.user.id);
       isAdmin = member.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
@@ -71,8 +74,10 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       new ButtonBuilder().setCustomId(`eventclose:nomerits:${sessionId}:${reviewerId}`).setLabel("Close w/No Merits").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(`eventclose:cancel:${sessionId}:${reviewerId}`).setLabel("Cancel").setStyle(ButtonStyle.Danger),
     );
+    const endedAlready = Boolean(active.endedAt);
+    const note = endedAlready ? " (main channel may already be closed)" : "";
     return interaction.reply({
-      content: `You're about to close session ${sessionId} in <#${active.channelId}>. Closing will stop tracking. Proceed?\n\nNote: Cancel keeps the event running.`,
+      content: `You're about to close event group (root session ${root!.id})${note}. Closing will stop tracking across all linked channels. Proceed?\n\nNote: Cancel keeps the event running.`,
       components: [row],
       flags: MessageFlags.Ephemeral,
     });
@@ -94,28 +99,35 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     try { return await interaction.editReply(data as any); } catch (e) { try { log.warn({ err: e }, "editReply failed (possibly stale interaction)"); } catch {} }
   };
 
-  // Helper to end the event group and optionally build review state
+  // Helper to end the event group and aggregate participants across ALL group sessions
   const endAndAggregate = async () => {
     const active = await prisma.eventSession.findUnique({ where: { id: sessionId } });
     if (!active) throw new Error("Session not found");
     const root = active.rootSessionId ? await prisma.eventSession.findUnique({ where: { id: active.rootSessionId } }) : active;
     if (!root) throw new Error("Root session not found");
-    const groupSessions = await prisma.eventSession.findMany({ where: { OR: [{ id: root.id }, { rootSessionId: root.id }], endedAt: null }, orderBy: { startedAt: "asc" } });
+    // Fetch all sessions in the group (ended or not)
+    const groupAll = await prisma.eventSession.findMany({ where: { OR: [{ id: root.id }, { rootSessionId: root.id }] }, orderBy: { startedAt: "asc" } });
+    const stillActive = groupAll.filter(s => s.endedAt == null);
     const now = new Date();
-    const endIds = groupSessions.map(s => s.id);
+    const endIds = stillActive.map(s => s.id);
     if (endIds.length) {
       await prisma.eventSession.updateMany({ where: { id: { in: endIds } }, data: { endedAt: now, status: "ENDED" } });
       for (const id of endIds) stopSessionTracker(id);
     }
-    // Cleanup watchers for bot-created
-    const endedWithMeta = await prisma.eventSession.findMany({ where: { id: { in: endIds } } });
-    for (const s of endedWithMeta) {
-      if (s.createdByBot) {
-        try { startChannelCleanupWatcher(client, s.guildId, s.channelId); } catch { }
+    // Cleanup watchers for bot-created on those we just ended
+    if (endIds.length) {
+      const endedWithMeta = await prisma.eventSession.findMany({ where: { id: { in: endIds } } });
+      for (const s of endedWithMeta) {
+        if (s.createdByBot) {
+          try { startChannelCleanupWatcher(client, s.guildId, s.channelId); } catch { }
+        }
       }
     }
-    // Aggregate
-    const allParticipants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: { in: endIds } } });
+    // Aggregate from ALL sessions in the group (whether ended previously or just now)
+    const groupIds = groupAll.map(s => s.id);
+    const allParticipants = groupIds.length
+      ? await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: { in: groupIds } } })
+      : [];
     const byUser = new Map<string, { present: number; speaking: number; lastJoinAt?: Date | null; lastSpeakAt?: Date | null }>();
     for (const p of allParticipants) {
       const cur = byUser.get(p.userId) || { present: 0, speaking: 0, lastJoinAt: null, lastSpeakAt: null };
@@ -130,7 +142,6 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     if (userIds.length > 0) {
       await ensureUsersByIds(userIds, "eventClose");
     }
-    
     for (const [uid, agg] of byUser) {
       await prisma.eventSessionParticipant.upsert({
         where: { eventSessionId_userId: { eventSessionId: root.id, userId: uid } },
@@ -167,6 +178,13 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     }
     try {
       const res = await endAndAggregate();
+      // Mark review as finalized with no merits
+      try {
+        await prisma.eventSession.update({
+          where: { id: res.root.id },
+          data: { reviewFinalizedAt: new Date(), reviewFinalizedBy: interaction.user.id },
+        });
+      } catch { }
       // Post follow-up in inactivity thread if available
       try {
         const info = getNotifyInfo(res.root.id) || getNotifyInfo(sessionId);
@@ -212,6 +230,10 @@ export default async function (interaction: ButtonInteraction, client: Client) {
       root = res.root; endIds = res.endIds as any;
     } catch (e: any) {
       return safeEditReply({ content: `Failed to close: ${String(e?.message || e)}`, components: [] });
+    }
+    // If already finalized (e.g., concurrent moderator), do not open review
+    if (root?.reviewFinalizedAt) {
+      return safeEditReply({ content: `This event's review was already finalized by <@${root.reviewFinalizedBy || 'unknown'}>.`, components: [] });
     }
     // Participants and review defaults (use per-type thresholds)
     const participants = await prisma.eventSessionParticipant.findMany({ where: { eventSessionId: root.id } });

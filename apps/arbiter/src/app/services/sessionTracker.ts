@@ -15,6 +15,8 @@ const lastGroupActivityByRoot = new Map<number, number>();
 const sessionToRoot = new Map<number, number>();
 // rootId -> root channelId
 const rootChannelIdByRoot = new Map<number, string>();
+// Cache best-known channel names by id so we can reference names after deletion
+const channelNameById = new Map<string, string>();
 // One inactivity watcher per root group (keyed by rootId)
 const inactivityWatchers = new Map<number, NodeJS.Timeout>();
 // Roots that have already sent an inactivity notification (to avoid duplicates)
@@ -120,7 +122,9 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   if (staffRole) mention += `<@&${staffRole.id}> `;
   if (adminRole) mention += `<@&${adminRole.id}> `;
   const creatorMention = session?.startedBy ? `<@${session.startedBy}> ` : "";
-  const msg = `${mention}${creatorMention}Please make sure someone closes out the merit tracking for event session ${sessionId} in <#${vcId}>${descPart}.\nUse /event stop <#${vcId}> or click the button below to close the event.`.trim();
+  const cachedName = channelNameById.get(vcId);
+  const nameSuffix = cachedName ? ` (${cachedName})` : "";
+  const msg = `${mention}${creatorMention}Please make sure someone closes out the merit tracking for event session ${sessionId} in <#${vcId}>${nameSuffix}${descPart}.\nUse /event stop (pick session ${sessionId}) or click the button below to close the event.`.trim();
   const mentionRoleIds = [admirals?.id, imperators?.id, staffRole?.id, adminRole?.id].filter(Boolean) as string[];
   const mentionUserIds = session?.startedBy ? [session.startedBy] : [];
   const components = [
@@ -181,8 +185,8 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
       return;
     }
     // Compute expected thread name
-    const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
-    const vcNameForThread = (vcForName as any)?.name || `vc-${vcId}`;
+  const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+  const vcNameForThread = (vcForName as any)?.name || channelNameById.get(vcId) || `vc-${vcId}`;
     const prefix = `Event started: ${vcNameForThread}: `;
     const MAX = 100;
     const maxDesc = Math.max(0, MAX - prefix.length);
@@ -266,7 +270,7 @@ async function notifyChannelClosure(client: Client, guildId: string, sessionId: 
   const prefix = caseType === "main"
     ? `The main voice channel for event session ${sessionId}${descPart} appears to be closed.`
     : `All voice channels for the event group (root session ${rootId}${descPart}) appear to be closed.`;
-  const msg = `${mention}${creatorMention}${prefix}\nUse /event stop or click the button below to close the event.`.trim();
+  const msg = `${mention}${creatorMention}${prefix}\nUse /event stop (select the session) or click the button below to close the event.`.trim();
 
   const components = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -317,8 +321,8 @@ async function notifyChannelClosure(client: Client, guildId: string, sessionId: 
     }
 
     // Build expected thread name similar to notifyInactivity
-    const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
-    const vcNameForThread = (vcForName as any)?.name || `vc-${vcId}`;
+  const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+  const vcNameForThread = (vcForName as any)?.name || channelNameById.get(vcId) || `vc-${vcId}`;
     const tPrefix = `Event started: ${vcNameForThread}: `;
     const MAX = 100;
     const maxDesc = Math.max(0, MAX - tPrefix.length);
@@ -446,6 +450,11 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       }
 
       const vc = channel as VoiceChannel | StageChannel;
+      // Cache the channel name for future notifications if Discord later forgets
+      try {
+        const name = (vc as any)?.name as string | undefined;
+        if (name && typeof name === 'string') channelNameById.set(vcId, name);
+      } catch { /* ignore */ }
       // Ensure members cache
       await vc.guild.members.fetch();
 
@@ -565,9 +574,34 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
         }
       }
 
-    } catch (err) {
+    } catch (err: any) {
       // Stop tracker if session was deleted or serious errors occur
       const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
+      // If channel is unknown (deleted), treat as the missing-channel branch and finalize
+      const code = (err && (err.code || (err.rawError && err.rawError.code))) ?? undefined;
+      const message = String((err && err.message) || "");
+      if (code === 10003 || /Unknown Channel/i.test(message)) {
+        try {
+          await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
+        } catch { }
+        const isMainChannel = vcId === rootChannelIdByRoot.get((sessionToRoot.get(sessionId) ?? sessionId));
+        const rootId = sessionToRoot.get(sessionId) ?? sessionId;
+        const othersExist = Array.from(activeTimers.keys()).some(sid => sid !== sessionId && (sessionToRoot.get(sid) ?? sid) === rootId);
+        const allChannelsClosed = !othersExist;
+        try {
+          if (isMainChannel) {
+            if (!rootInactivityNotified.has(rootId)) {
+              const rootVc = rootChannelIdByRoot.get(rootId) || vcId;
+              await notifyInactivity(client as any, guildId, rootId, rootVc);
+              rootInactivityNotified.add(rootId);
+            }
+          } else if (allChannelsClosed) {
+            await notifyChannelClosure(client as any, guildId, rootId, vcId, "all");
+          }
+        } catch { }
+        stopSessionTracker(sessionId);
+        return;
+      }
       log.error({ err }, "Session tracker error");
     }
   };

@@ -105,6 +105,9 @@ model Merit {
   user            User      @relation(fields: [userID], references: [id])
 
   @@index([userID])
+  /// Ensure per-session, per-type, per-user event awards are unique when using
+  /// additionalNotes formatted as: "Awarded via event session <sessionId>"
+  @@unique([userID, typeId, additionalNotes])
   @@map("merit")
   @@schema("arbiter")
 }
@@ -144,6 +147,9 @@ model EventSession {
   meritTypeId      Int?
   /// Optional custom description to use when awarding merits from this event
   awardDescription String?                   @db.VarChar(255)
+  /// Mark when a review was finalized (awarded or explicitly none) and by whom
+  reviewFinalizedAt DateTime?
+  reviewFinalizedBy String?
   meritType        MeritType?                @relation(fields: [meritTypeId], references: [id])
   root             EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
   children         EventSession[]            @relation("EventSessionGroup")
