@@ -14,15 +14,3 @@ npx commandkit dev
 
 -   [Documentation](https://commandkit.dev)
 -   [Discord](https://ctrl.lol/discord)
-
-## Bot How-To
-
--   Bot commands index (user docs): see `docs/BOT-COMMANDS-INDEX.md`.
-
-## Developer Docs
-
--   Technical overviews index: see `docs/TECH-OVERVIEW-INDEX.md`.
-
-### Dev mode
-
--   To allow nickname approvals/sync to succeed without Manage Nicknames in local/dev, see `docs/dev-mode.md`.

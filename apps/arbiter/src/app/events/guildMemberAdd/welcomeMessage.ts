@@ -1,8 +1,6 @@
-import { EmbedBuilder, GuildMember, TextChannel, Channel } from "discord.js";
-import { childLogger } from "@workspace/logger";
+import {EmbedBuilder, GuildMember, TextChannel, Channel} from "discord.js";
 
 export default async function (member: GuildMember) {
-    const log = childLogger({ mod: 'welcome', guildId: member.guild.id, userId: member.user.id });
     try {
         const welcomeChannel = member.guild.channels.cache.find(
             (channel: Channel) => channel.id === "1198735581186895892"
@@ -43,8 +41,8 @@ export default async function (member: GuildMember) {
             .setThumbnail(member.user.displayAvatarURL())
             .setTimestamp();
 
-        await (welcomeChannel as TextChannel).send({ content: `<@${member.user.id}>`, embeds: [embed] });
+        await (welcomeChannel as TextChannel).send({content: `<@${member.user.id}>`, embeds: [embed]});
     } catch (error) {
-        log.error({ err: error }, 'Failed to send welcome message');
+        console.log(error);
     }
 };

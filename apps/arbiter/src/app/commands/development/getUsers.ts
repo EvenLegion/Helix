@@ -1,31 +1,41 @@
-import type { CommandData, ChatInputCommandContext } from "commandkit";
+import type {CommandData, ChatInputCommandContext} from "commandkit";
 import { MessageFlags, AttachmentBuilder } from "discord.js";
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CONFIG } from "../../config";
 
 export const command: CommandData = {
     name: 'get-users',
     description: 'Fetches all users in the server'
 };
 
-export async function chatInput({ interaction }: ChatInputCommandContext) {
+export async function chatInput({ interaction }: ChatInputCommandContext ) {
 
     const guild = interaction.guild;
 
-    if (!guild) {
+    if(!guild) {
         return interaction.reply({
             content: 'This command can only be used in a server.',
             flags: MessageFlags.Ephemeral,
         });
     }
 
-    const ROLE_ID = CONFIG.LEGIONNAIRE_ROLE_ID; // Legionnaire Role ID
+    const ROLE_ID = '1352350908385853541'; // Legionnaire Role ID
 
-    const selectedRole = CONFIG.SELECTED_DIVISION_ROLE_IDS;
+    const selectedRole = [
+        '1356438908212088863',
+        '1356438093988757686',
+        '1356438285592825989',
+        '1362489356958437477',
+        '1356438213438472323',
+        '1356458993056485477',
+        '1356459074392162414',
+        '1356459107955118110',
+        '1356459145762574516',
+        '1356459183548923965'
+    ]
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferReply({flags: MessageFlags.Ephemeral});
 
     await guild.members.fetch();
 

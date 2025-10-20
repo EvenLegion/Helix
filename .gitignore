@@ -25,11 +25,7 @@ coverage
 .next/
 out/
 build
-dist/
-**/dist/
-
-# Explicitly ignore Arbiter build output
-apps/arbiter/dist/
+dist
 
 
 # Debug
@@ -41,22 +37,6 @@ yarn-error.log*
 .DS_Store
 *.pem
 
-# Local scaffolds (do not commit)
-my-turborepo/
-
-# Local Postgres data (docker volume bind)
-data/
-
-# Prisma generated client (prefer generate step over committing artifacts)
-packages/database/generated/
-
-# Database backups/exports
-packages/database/backups/
-
-# Local env presets (non-standard .env files)
-packages/database/env-development
-apps/nexus/env-development
-
 # Prisma
 /data
 /packages/database/generated/
@@ -64,16 +44,3 @@ apps/nexus/env-development
 # JetBrains
 .idea
 TODO.txt
-<<<<<<< Updated upstream
-
-# TurboRepo
-my-turborepo/
-
-# VS Code editor settings (keep local)
-.vscode/
-
-.github/chatmodes/*
-DiscordRoles.xlsx
-=======
-.github/copilot-instructions.md
->>>>>>> Stashed changes

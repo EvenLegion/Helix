@@ -8,8 +8,6 @@ import {
     TextInputStyle
 } from "discord.js";
 import { prisma } from "@workspace/db";
-import { forInteraction } from "@workspace/logger";
-import { syncNicknameAndSummarize } from "../../services/nicknameSync";
 
 export default async function (interaction: ButtonInteraction, client: Client) {
     // Check if the interaction is a button interaction
@@ -37,7 +35,6 @@ export default async function (interaction: ButtonInteraction, client: Client) {
     const member = await interaction.guild?.members.fetch(request.userId);
 
     if (action === 'approve') {
-        const log = forInteraction(interaction).child({ mod: 'nameChange', action: 'approve', requestId });
 
         // Change the member's nickname
         try {
@@ -54,69 +51,39 @@ export default async function (interaction: ButtonInteraction, client: Client) {
             request.approved = true;
             request.approvedBy = interaction.user.id;
             await prisma.nameChangeRequest.update({
-                where: { id: parseInt(requestId!) },
-                data: { approved: request.approved, approvedBy: request.approvedBy }
+                where: {
+                    id: parseInt(requestId!)
+                },
+                data: {
+                    approved: request.approved,
+                    approvedBy: request.approvedBy
+                }
             })
 
-            // Update the user in the database
-            const user = await prisma.user.findUnique({ where: { id: request.userId } });
+            //Update the user in the database
+            const user = await prisma.user.findUnique({
+                where: {
+                    id: request.userId
+                },
+            });
             if (user) {
-                await prisma.user.update({ where: { id: request.userId }, data: { preferredName: request.requestedName, nickname: request.requestedName } })
+                await prisma.user.update({
+                    where: {
+                        id: request.userId
+                    },
+                    data: {
+                        nickname: request.requestedName
+                    }
+                })
             }
-
-            // Attempt to sync nickname decorations based on merits/division rules
-            try {
-                const { message } = await syncNicknameAndSummarize({ guild: interaction.guild!, userID: request.userId });
-                await interaction.followUp({ content: `Nickname sync: ${message}.`, flags: MessageFlags.Ephemeral });
-            } catch { }
 
             // Archive the thread
             const thread = await interaction.channel?.fetch();
             if (thread && thread.isThread()) {
                 await thread.setArchived(true);
             }
-        } catch (error: any) {
-            const truthy = new Set(['1', 'true', 'yes', 'on']);
-            const DEV_BYPASS = truthy.has(String(process.env.DEV_ALLOW_NICK_EDIT || '').toLowerCase()) || truthy.has(String(process.env.ALLOW_NICK_DEV_APPROVE || '').toLowerCase());
-            const missingPerms = error?.code === 50013 || String(error?.message || '').includes('Missing Permissions');
-            if (DEV_BYPASS && missingPerms) {
-                log.warn('Dev bypass: missing permissions; proceeding with approval without changing nickname.');
-                // Proceed with approval and DB updates without changing the nickname
-                await interaction.reply({
-                    content: `Name change request approved (dev bypass). ${request.currentName} would be set to ${request.requestedName}, but bot lacks permissions in this environment.`,
-                });
-                // DM the user with a dev-bypass notice (optional)
-                try {
-                    await member?.send({
-                        content: `Your name change request was approved. In this test environment, the bot couldn't change your nickname automatically. Staff will apply it if needed.`
-                    });
-                } catch { }
-
-                request.approved = true;
-                request.approvedBy = interaction.user.id;
-                await prisma.nameChangeRequest.update({
-                    where: { id: parseInt(requestId!) },
-                    data: { approved: request.approved, approvedBy: request.approvedBy }
-                });
-
-                const user = await prisma.user.findUnique({ where: { id: request.userId } });
-                if (user) {
-                    await prisma.user.update({ where: { id: request.userId }, data: { preferredName: request.requestedName, nickname: request.requestedName } });
-                }
-
-                // Attempt to sync nickname decorations even in dev-bypass case (will summarize outcome)
-                try {
-                    const { message } = await syncNicknameAndSummarize({ guild: interaction.guild!, userID: request.userId });
-                    await interaction.followUp({ content: `Nickname sync: ${message}.`, flags: MessageFlags.Ephemeral });
-                } catch { }
-
-                const thread = await interaction.channel?.fetch();
-                if (thread && thread.isThread()) {
-                    await thread.setArchived(true);
-                }
-                return;
-            }
-            log.error({ err: error }, 'Failed to change nickname');
+        } catch (error) {
+            console.error('Failed to change nickname:', error);
             return interaction.reply({
                 content: 'Failed to change nickname. Please check my permissions.',
                 flags: MessageFlags.Ephemeral

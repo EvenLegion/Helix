@@ -3,25 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev --skip-generate",
-    "db:deploy": "prisma migrate deploy",
-    "db:export-all": "node ./scripts/export-all.js",
-    "db:import-all": "node ./scripts/import-all.js",
-    "db:reset-sequences": "node ./scripts/reset-sequences.js",
-    "db:verify-sequences": "node ./scripts/verify-sequences.js",
-    "db:restore": "node ./scripts/restore-database.js",
-    "db:export-merit-types": "node ./scripts/export-merit-types.js",
-    "db:clear-merit-and-types": "node ./scripts/clear-merit-and-types.js",
-    "db:import-merit-types": "node ./scripts/import-merit-types.js",
-    "db:check-orphaned-merits": "node ./scripts/check-orphaned-merits.js",
-    "db:delete-invalid-merits": "node ./scripts/delete-invalid-merits.js",
-    "db:find-merits-null-user": "node ./scripts/find-merits-with-null-user.js",
-    "db:scan-merits-vs-users": "node ./scripts/scan-merits-vs-users.js",
-    "db:fix-merit-userids-trim": "node ./scripts/fix-merit-userids-trim.js",
-    "db:seed-ranks-divisions": "node ./scripts/seed-ranks-and-divisions.js",
-    "db:delete-user": "node ./scripts/delete-user.js"
+    "db:deploy": "prisma migrate deploy"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
@@ -33,9 +17,9 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   }
 }
