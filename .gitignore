@@ -44,3 +44,4 @@ yarn-error.log*
 # JetBrains
 .idea
 TODO.txt
+.github/copilot-instructions.md
