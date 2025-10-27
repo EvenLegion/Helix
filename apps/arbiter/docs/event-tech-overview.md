@@ -27,14 +27,19 @@ Last updated: 2025-09-24
 
 2) Services
 - `apps/arbiter/src/app/services/sessionTracker.ts`
-  - Periodic sampling (every 15s) of members in a voice/stage channel.
+  - Periodic sampling (every 60s) of members in a voice/stage channel.
   - Upserts `EventSessionParticipant` rows for presence time and a simple speaking-time approximation.
-  - Ends session if the channel disappears.
-- Inactivity watcher:
-  - Computes inactivity based on recent presence/speaking activity with a “creator present” gate.
-  - After a configured grace period, posts an alert to a notify channel and attempts to create a thread anchored to that alert.
-  - Inside the thread, pings leadership roles and posts a live “Close Event” button.
-  - Stores thread/message IDs in an in-memory notify store for follow-ups.
+  - Handles three distinct notification cases:
+    1) Inactivity (no channel closures): A group-wide watcher (keyed by the root session) tracks last speaking-like activity across all channels in the group. After the configured inactivity threshold, it posts a notification via `notifyInactivity()`.
+    2) Main channel closed: If the root/main voice channel disappears, the tracker immediately posts the inactivity-style notification via `notifyInactivity()` (once per root), so leadership is prompted to close out merits for the event.
+    3) All channels closed: If a non-root channel disappears and no other channels remain in the group, the tracker posts a closure notification via `notifyChannelClosure(..., "all")`.
+  - Ends the specific session if its channel disappears (sets `endedAt` and `status = ENDED`).
+  - Thread posting: Both inactivity and closure notifications resolve or create a thread in the notify channel and post inside the thread only (no parent-channel messages).
+  - Mentions are restricted with `allowedMentions` and include leadership roles and the event creator. In development, an optional dev user ID can be DM’d.
+- Inactivity watcher details:
+  - Computes inactivity based on recent presence/speaking activity with a “creator present” gate to suppress false positives when only the creator remains.
+  - Starts with a 30-second delay to avoid racing the first sampling tick.
+  - On threshold, calls `notifyInactivity()` once per root and stops the watcher for that group.
 - `apps/arbiter/src/app/services/channelCleanup.ts`
   - After stop, watches `createdByBot` channels; deletes when empty (permission-checked), with a TTL safeguard.
 - `apps/arbiter/src/app/services/reviewStore.ts`
@@ -96,11 +101,10 @@ Last updated: 2025-09-24
   6. Post a follow-up in the inactivity thread and clear notify mapping.
 
 - Inactivity:
-  1. Tracker detects prolonged inactivity with creator-present gating.
-  2. Sends a parent alert to the notify channel (without role mentions).
-  3. Tries thread creation in this order: anchor via startMessage, startThread on message, channel.threads.create (public/private as available).
-  4. Posts a new message inside the thread with role pings limited via allowedMentions and a live Close button; stores IDs in notifyStore.
-  5. If thread creation fails, edits the parent with a safe role ping and Close button as a fallback.
+  1. Group watcher detects prolonged inactivity with creator-present gating.
+  2. Resolves the configured notify channel and tries to find or create a thread named `Event started: <VC Name>: <awardDesc>`.
+  3. Posts a message inside the thread with role pings limited via `allowedMentions` and a live Close button; stores thread info in the notify store.
+  4. In development mode, also DMs a configured developer user.
 
 ## Error handling and permissions
 - Channel resolution errors reply ephemerally with guidance.
@@ -116,7 +120,7 @@ Last updated: 2025-09-24
 - Name resolution during review builds a per-page name map prioritized as: DB `nickname/name/username` → guild member displayName → user.username → user ID; the current page is refreshed from the guild to ensure up-to-date display.
 - Post-confirm, nickname sync is attempted for awarded users; outcomes include success, no change, not in guild, or permission-related reasons (with dev bypass support).
 - Structured logging via `@workspace/logger` replaces `console.*` across the feature: debug for normal flow/metrics, warn for guard checks and expected issues, error for failures.
-- Inactivity alerts spawn a thread titled “Stale Event Tracking: <VC Name>” with leadership ping and a live Close button; follow-ups are posted on review open/complete or when closed without merits.
+- Inactivity and closure alerts post inside a thread named `Event started: <VC Name>: <awardDesc>` with leadership ping and a live Close button; follow-ups are posted on review open/complete or when closed without merits.
 - Thread creation is resilient with multiple strategies and logs permission diagnostics: `CreatePublicThreads`, `CreatePrivateThreads`, `SendMessagesInThreads`.
 - Debug verbosity is controlled solely by the logger level; extra ad-hoc gating removed to keep diagnostics rich when LOG_LEVEL=debug.
 - Review UI now shows total time present, total speaking, and participation %. Default selection remains at ≥ 20% presence.
@@ -133,6 +137,16 @@ Last updated: 2025-09-24
 - **Root cause**: Inactivity watcher and tick timer started simultaneously, causing checks before activity updates
 - **Fix**: Added 30-second offset to inactivity watcher startup in `sessionTracker.ts`
 - **Impact**: Inactivity alerts only fire when channels are truly inactive
+
+### Inactivity vs Channel-Closure Differentiation
+- **Change**: Session tracker now explicitly handles three cases:
+  1) Inactivity across the group (no closures) → `notifyInactivity()` once per root
+  2) Main channel closed (root VC disappears) → immediate `notifyInactivity()` for the root
+  3) All channels closed (no child VCs remain) → `notifyChannelClosure(..., "all")`
+- **Implementation**:
+  - All notifications reuse the same thread resolution/creation logic and allowed-mentions policy.
+  - Detection for “all channels closed” excludes the current session to avoid false positives during shutdown.
+  - Removed an unimplemented “Add Voice Channel” button from closure notifications to avoid dead UI.
 
 ### Autocomplete Reliability  
 - **Issue**: Autocomplete failures under network latency causing interaction errors

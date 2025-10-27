@@ -15,6 +15,8 @@ const lastGroupActivityByRoot = new Map<number, number>();
 const sessionToRoot = new Map<number, number>();
 // rootId -> root channelId
 const rootChannelIdByRoot = new Map<number, string>();
+// Cache best-known channel names by id so we can reference names after deletion
+const channelNameById = new Map<string, string>();
 // One inactivity watcher per root group (keyed by rootId)
 const inactivityWatchers = new Map<number, NodeJS.Timeout>();
 // Roots that have already sent an inactivity notification (to avoid duplicates)
@@ -120,7 +122,9 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
   if (staffRole) mention += `<@&${staffRole.id}> `;
   if (adminRole) mention += `<@&${adminRole.id}> `;
   const creatorMention = session?.startedBy ? `<@${session.startedBy}> ` : "";
-  const msg = `${mention}${creatorMention}Please make sure someone closes out the merit tracking for event session ${sessionId} in <#${vcId}>${descPart}.\nUse /event stop <#${vcId}> or click the button below to close the event.`.trim();
+  const cachedName = channelNameById.get(vcId);
+  const nameSuffix = cachedName ? ` (${cachedName})` : "";
+  const msg = `${mention}${creatorMention}Please make sure someone closes out the merit tracking for event session ${sessionId} in <#${vcId}>${nameSuffix}${descPart}.\nUse /event stop (pick session ${sessionId}) or click the button below to close the event.`.trim();
   const mentionRoleIds = [admirals?.id, imperators?.id, staffRole?.id, adminRole?.id].filter(Boolean) as string[];
   const mentionUserIds = session?.startedBy ? [session.startedBy] : [];
   const components = [
@@ -181,8 +185,8 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
       return;
     }
     // Compute expected thread name
-    const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
-    const vcNameForThread = (vcForName as any)?.name || `vc-${vcId}`;
+  const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+  const vcNameForThread = (vcForName as any)?.name || channelNameById.get(vcId) || `vc-${vcId}`;
     const prefix = `Event started: ${vcNameForThread}: `;
     const MAX = 100;
     const maxDesc = Math.max(0, MAX - prefix.length);
@@ -230,6 +234,135 @@ async function notifyInactivity(client: Client, guildId: string, sessionId: numb
     log.debug({ threadId: (threadToUse as any).id }, "Inactivity notification posted inside thread");
   } else {
     log.warn("No thread available to post inactivity; skipping message");
+  }
+}
+
+async function notifyChannelClosure(client: Client, guildId: string, sessionId: number, vcId: string, caseType: "main" | "all") {
+  const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
+  log.debug({ caseType }, "Preparing closure notification");
+  const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
+  // Load session details for description and creator mention
+  const session = await prisma.eventSession.findUnique({ where: { id: sessionId } }).catch(() => null as any);
+  const rootId = session?.rootSessionId ?? session?.id ?? sessionId;
+  const awardDesc = String((session as any)?.awardDescription ?? '').replace(/[\r\n]+/g, ' ').trim();
+  const descPart = awardDesc ? ` — ${awardDesc}` : '';
+
+  // Dev-only: resolve specific user to DM in development
+  let devIdToPing: string | null = null;
+  if (IS_DEV) {
+    devIdToPing = await resolveDevUserId(client);
+  }
+
+  // Resolve leadership roles and event creator for mentions
+  const admirals = findRole(guild, ["Admirallus (Admiral)", "Admiral", "Admirallus"]);
+  const imperators = findRole(guild, ["Imperator (Commander)", "Imperator", "Commander"]);
+  const staffRole = findRole(guild, ["Server Staff", "Staff"]);
+  const adminRole = findRole(guild, ["Admin", "Administrator"]);
+  let mention = "";
+  if (admirals) mention += `<@&${admirals.id}> `;
+  if (imperators) mention += `<@&${imperators.id}> `;
+  if (staffRole) mention += `<@&${staffRole.id}> `;
+  if (adminRole) mention += `<@&${adminRole.id}> `;
+  const creatorMention = session?.startedBy ? `<@${session.startedBy}> ` : "";
+  const mentionRoleIds = [admirals?.id, imperators?.id, staffRole?.id, adminRole?.id].filter(Boolean) as string[];
+  const mentionUserIds = session?.startedBy ? [session.startedBy] : [];
+
+  const prefix = caseType === "main"
+    ? `The main voice channel for event session ${sessionId}${descPart} appears to be closed.`
+    : `All voice channels for the event group (root session ${rootId}${descPart}) appear to be closed.`;
+  const msg = `${mention}${creatorMention}${prefix}\nUse /event stop (select the session) or click the button below to close the event.`.trim();
+
+  const components = [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`event:close:${sessionId}`)
+        .setLabel("Close Event")
+        .setStyle(ButtonStyle.Danger)
+    )
+  ];
+
+  // Dev-only: also DM the message
+  if (IS_DEV && devIdToPing) {
+    try {
+      const target = await guild.members.fetch(devIdToPing).catch(() => null as any);
+      if (target) await target.send({ content: msg, components });
+    } catch { /* ignore DM failures */ }
+  }
+
+  // Try to post inside existing root thread, else create/reuse thread in notify channel
+  let threadToUse: any | undefined;
+  try {
+    const info = getNotifyInfo(rootId);
+    if (info?.threadId) {
+      const fetched = await guild.channels.fetch(info.threadId).catch(() => null as any);
+      if (fetched && (fetched as any).send) threadToUse = fetched as any;
+    }
+  } catch { /* ignore */ }
+
+  let notifyChan: TextChannel | undefined;
+  if (!threadToUse) {
+    if (NOTIFY_CHANNEL_ID) {
+      notifyChan = (guild.channels.cache.get(NOTIFY_CHANNEL_ID) as TextChannel) || (await guild.channels.fetch(NOTIFY_CHANNEL_ID).catch(() => undefined) as any);
+    }
+    if (!notifyChan) {
+      const desiredName = NOTIFY_CHANNEL_NAME.replace(/^#/, "");
+      notifyChan = guild.channels.cache.find((c: any) => c.name === desiredName && c.isTextBased()) as TextChannel | undefined;
+    }
+    if (!notifyChan) {
+      const fallbacks = ["bot-requests", "commands", "bot-commands", "bot"];
+      for (const name of fallbacks) {
+        const ch = guild.channels.cache.find((c: any) => c.name === name && c.isTextBased());
+        if (ch) { notifyChan = ch as TextChannel; break; }
+      }
+    }
+    if (!notifyChan) {
+      log.warn({ desiredName: NOTIFY_CHANNEL_NAME.replace(/^#/, ""), desiredId: NOTIFY_CHANNEL_ID }, "No notify channel found; cannot post closure notification");
+      return;
+    }
+
+    // Build expected thread name similar to notifyInactivity
+  const vcForName = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId).catch(() => null as any);
+  const vcNameForThread = (vcForName as any)?.name || channelNameById.get(vcId) || `vc-${vcId}`;
+    const tPrefix = `Event started: ${vcNameForThread}: `;
+    const MAX = 100;
+    const maxDesc = Math.max(0, MAX - tPrefix.length);
+    const descForName = awardDesc.slice(0, maxDesc);
+    const expectedName = `${tPrefix}${descForName}`;
+
+    try { await (notifyChan as any).threads.fetchActive(); } catch { /* ignore */ }
+    threadToUse = (notifyChan as any).threads?.cache?.find?.((t: any) => t?.name === expectedName && typeof t?.send === 'function');
+    if (!threadToUse) {
+      try {
+        const archived: any = await (notifyChan as any).threads.fetchArchived?.().catch(() => null);
+        const threads = archived?.threads || archived || [];
+        threadToUse = threads.find?.((t: any) => t?.name === expectedName && typeof t?.send === 'function');
+      } catch { /* ignore */ }
+    }
+    if (!threadToUse) {
+      try {
+        const created = await (notifyChan as any).threads.create({ name: expectedName, autoArchiveDuration: 60, type: ChannelType.PublicThread, reason: `Closure for session ${rootId}` });
+        threadToUse = created;
+      } catch {
+        try {
+          const createdPriv = await (notifyChan as any).threads.create({ name: expectedName, autoArchiveDuration: 60, type: ChannelType.PrivateThread, reason: `Closure for session ${rootId}` });
+          threadToUse = createdPriv;
+        } catch { /* ignore */ }
+      }
+      if (threadToUse) {
+        const id = (threadToUse as any).id as string | undefined;
+        if (id) {
+          setNotifyInfo(sessionId, { channelId: (notifyChan as any).id as string, threadId: id });
+          if (rootId && rootId !== sessionId) setNotifyInfo(rootId, { channelId: (notifyChan as any).id as string, threadId: id });
+        }
+      }
+    }
+  }
+
+  if (threadToUse) {
+    await (threadToUse as any).send({ content: msg, components, allowedMentions: { roles: mentionRoleIds, users: mentionUserIds, parse: [], repliedUser: false } });
+    log.debug({ threadId: (threadToUse as any).id, caseType }, "Closure notification posted inside thread");
+  } else {
+    log.warn("No thread available to post closure notification; skipping message");
   }
 }
 
@@ -291,22 +424,37 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
       const guild = client.guilds.cache.get(guildId) ?? await client.guilds.fetch(guildId);
       const channel = guild.channels.cache.get(vcId) ?? await guild.channels.fetch(vcId);
       if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
-        // End session if channel not found
-        await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
-        log.warn("Channel not found; ending session");
-        // Only notify once from the root session context and only if not already notified
-        if (sessionId === rootId && !rootInactivityNotified.has(rootId)) {
-          log.debug("Root channel missing or deleted; sending inactivity/closure notification");
-          await notifyInactivity(client, guildId, rootId, rootVcId);
-          rootInactivityNotified.add(rootId);
-        } else {
-          log.debug({ rootId }, "Child channel missing or deleted; skipping notification (root watcher will handle group inactivity)");
+        // Mark this specific session as ended when its channel is missing
+        try {
+          await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
+        } catch { /* ignore DB errors here */ }
+
+        const isMainChannel = vcId === rootChannelIdByRoot.get(rootId);
+        // Determine if any other sessions under this root are still active (exclude current session)
+        const othersExist = Array.from(activeTimers.keys()).some(sid => sid !== sessionId && (sessionToRoot.get(sid) ?? sid) === rootId);
+        const allChannelsClosed = !othersExist;
+
+        // For main channel disappearance
+        if (isMainChannel) {
+          if (!rootInactivityNotified.has(rootId)) {
+            await notifyInactivity(client, guildId, rootId, rootVcId);
+            rootInactivityNotified.add(rootId);
+          }
+        } else if (allChannelsClosed) {
+          // If no channels remain in the group, send explicit group-closure notification
+          await notifyChannelClosure(client, guildId, rootId, vcId, "all");
         }
+
         stopSessionTracker(sessionId);
         return;
       }
 
       const vc = channel as VoiceChannel | StageChannel;
+      // Cache the channel name for future notifications if Discord later forgets
+      try {
+        const name = (vc as any)?.name as string | undefined;
+        if (name && typeof name === 'string') channelNameById.set(vcId, name);
+      } catch { /* ignore */ }
       // Ensure members cache
       await vc.guild.members.fetch();
 
@@ -426,9 +574,34 @@ export async function startSessionTracker(client: any, sessionId: number, guildI
         }
       }
 
-    } catch (err) {
+    } catch (err: any) {
       // Stop tracker if session was deleted or serious errors occur
       const log = childLogger({ mod: "eventTrack", sessionId, guildId, channelId: vcId });
+      // If channel is unknown (deleted), treat as the missing-channel branch and finalize
+      const code = (err && (err.code || (err.rawError && err.rawError.code))) ?? undefined;
+      const message = String((err && err.message) || "");
+      if (code === 10003 || /Unknown Channel/i.test(message)) {
+        try {
+          await prisma.eventSession.update({ where: { id: sessionId }, data: { endedAt: new Date(), status: "ENDED" } });
+        } catch { }
+        const isMainChannel = vcId === rootChannelIdByRoot.get((sessionToRoot.get(sessionId) ?? sessionId));
+        const rootId = sessionToRoot.get(sessionId) ?? sessionId;
+        const othersExist = Array.from(activeTimers.keys()).some(sid => sid !== sessionId && (sessionToRoot.get(sid) ?? sid) === rootId);
+        const allChannelsClosed = !othersExist;
+        try {
+          if (isMainChannel) {
+            if (!rootInactivityNotified.has(rootId)) {
+              const rootVc = rootChannelIdByRoot.get(rootId) || vcId;
+              await notifyInactivity(client as any, guildId, rootId, rootVc);
+              rootInactivityNotified.add(rootId);
+            }
+          } else if (allChannelsClosed) {
+            await notifyChannelClosure(client as any, guildId, rootId, vcId, "all");
+          }
+        } catch { }
+        stopSessionTracker(sessionId);
+        return;
+      }
       log.error({ err }, "Session tracker error");
     }
   };
