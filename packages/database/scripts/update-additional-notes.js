@@ -10,7 +10,6 @@ async function fixArbiterImportDuplicates() {
         { additionalNotes: "Arbiter Import" },
         { additionalNotes: "" },
         { additionalNotes: " " },
-        { additionalNotes: null },
       ],
     },
     orderBy: {
