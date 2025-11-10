@@ -295,24 +295,5 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
             },
             cell: ({ row }) => new Date(row.getValue('joinedAt')).toLocaleDateString(),
         },
-        {
-            id: 'actions',
-            header: () => <div className="text-right">Actions</div>,
-            cell: () => (
-                <div className="flex items-center justify-end gap-2">
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button size="sm">Edit</Button>
-                        </DialogTrigger>
-                        <DialogContent className="md:max-w-lg">
-                            <DialogHeader>
-                                <DialogTitle>User Edit</DialogTitle>
-                                <DialogDescription>Edit a user in the organization.</DialogDescription>
-                            </DialogHeader>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-            ),
-        },
     ];
 }
