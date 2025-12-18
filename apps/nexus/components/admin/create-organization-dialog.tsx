@@ -25,7 +25,7 @@ export function CreateOrganizationDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="p-4">Create New Organization</Button>
+                <Button className="p-2">Create New Organization</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>

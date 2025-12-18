@@ -31,7 +31,8 @@ interface CreateOrganizationFormProps {
     onSuccess?: () => void;
 }
 
-export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProps) {
+export function
+CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProps) {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
     const form = useForm<z.infer<typeof formSchema>>({

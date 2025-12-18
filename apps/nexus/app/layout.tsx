@@ -30,7 +30,7 @@ export default function RootLayout({ children } : {children: React.ReactNode}) {
                         "--header-height": "calc(var(--spacing) * 12)",
                     } as React.CSSProperties
                 }>
-                <AppSidebar varient="inset" />
+                <AppSidebar variant="inset" />
                 <SidebarInset >
                     <SiteHeader />
                     <main>

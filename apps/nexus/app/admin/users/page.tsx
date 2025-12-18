@@ -1,24 +1,14 @@
 'use server';
 
 import { getOrganizations } from 'server/organizations';
-
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@workspace/ui/components/dialog';
-import { Button } from '@workspace/ui/components/button';
 import { CreateOrganizationDialog } from '@/components/admin/create-organization-dialog';
 import { CreateNewRoleDialog } from '@/components/admin/create-new-role';
 import { ManageRoleDialog } from '@/components/admin/manage-role';
-import { CreateRoleForm } from '@/components/forms/user/create-role-form';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@workspace/ui/components/card';
 import { FilteredMembersTable } from '@/components/admin/filtered-members-table';
 import ActiveOrg from '@/components/admin/active-org';
 import { prisma } from '@workspace/db';
+import {RemoveOrganizationDialog} from "@/components/admin/remove-organization-dialog";
 
 export default async function Users() {
     const userOrgs = await getOrganizations();
@@ -61,6 +51,7 @@ export default async function Users() {
                     </CardContent>
                     <CardFooter>
                         <CreateOrganizationDialog />
+                        <RemoveOrganizationDialog />
                     </CardFooter>
                 </Card>
                 <CreateNewRoleDialog />
