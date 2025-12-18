@@ -54,7 +54,7 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
 
             const memberId = member.id;
             const currentRoles = member.role;
-            const rolesArray = [];
+            const rolesArray: any = [];
 
             if (currentRoles) {
                 rolesArray.push(...currentRoles.split(',').map((r) => r.trim()));
