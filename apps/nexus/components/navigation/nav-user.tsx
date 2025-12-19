@@ -42,8 +42,9 @@ export function NavUser({
         <SidebarMenu>
             <SidebarMenuItem>
                 <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger render={(props) => (
                         <SidebarMenuButton
+                            {...props}
                             size={"lg"}
                             className={"data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"}
                             >
@@ -57,7 +58,7 @@ export function NavUser({
                             </div>
                             <EllipsisVertical className={"ml-auto size-4"} />
                         </SidebarMenuButton>
-                    </DropdownMenuTrigger>
+                    )} />
                     <DropdownMenuContent
                         className={"w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"}
                         side={isMobile ? "bottom" : "right"}

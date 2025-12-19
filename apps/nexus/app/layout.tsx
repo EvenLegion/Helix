@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import "@workspace/ui/styles/globals.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/jetbrains-mono/600.css";
+import "@fontsource/jetbrains-mono/700.css";
+import "@workspace/ui/globals.css";
 import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar"
 import { AppSidebar } from "@/components/navigation/app-sidebar";
 import React from "react";

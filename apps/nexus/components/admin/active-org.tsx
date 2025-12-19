@@ -2,6 +2,7 @@
 
 import { authClient } from "@/lib/auth-client";
 import { Organization } from "@workspace/db";
+import { useEffect, useState } from "react";
 
 import {
     Select,
@@ -20,8 +21,16 @@ export default function ActiveOrg({
     organizations
 }: ActiveOrgProps) {
     const { data: activeOrg } = authClient.useActiveOrganization();
+    const [selectedOrg, setSelectedOrg] = useState<string>("");
+
+    useEffect(() => {
+        if (activeOrg?.id) {
+            setSelectedOrg(activeOrg.id);
+        }
+    }, [activeOrg?.id]);
 
     const handleOrgChange = async (organizationId: string) => {
+        setSelectedOrg(organizationId);
         try {
             const { error } = await authClient.organization.setActive({
                 organizationId,
@@ -37,7 +46,7 @@ export default function ActiveOrg({
     }
 
     return (
-        <Select onValueChange={handleOrgChange} value={activeOrg?.id}>
+        <Select onValueChange={handleOrgChange} value={selectedOrg}>
             <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Active Organization" />
             </SelectTrigger>

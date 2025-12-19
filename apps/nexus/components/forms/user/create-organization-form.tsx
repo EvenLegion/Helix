@@ -11,16 +11,14 @@ import { z } from "zod"
 
 import { Button } from "@workspace/ui/components/button"
 import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-    FormDescription,
-} from "@workspace/ui/components/form"
+    Field,
+    FieldLabel,
+    FieldDescription,
+    FieldError,
+} from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { Loader2 } from "lucide-react"
+import { Controller } from "react-hook-form"
 
 const formSchema = z.object({
     name: z.string().min(2).max(50),
@@ -71,44 +69,46 @@ CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProps) {
     }
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Organization Name</FormLabel>
-                            <FormControl>
-                                <Input placeholder="My Organization" {...field} />
-                            </FormControl>
-                            <FormDescription>This is the name of your organization.</FormDescription>
-                            <FormMessage />
-                        </FormItem>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Controller
+                control={form.control}
+                name="name"
+                render={({ field, fieldState }) => (
+                    <Field data-invalid={!!fieldState.error}>
+                        <FieldLabel htmlFor={field.name}>Organization Name</FieldLabel>
+                        <Input
+                            id={field.name}
+                            placeholder="My Organization"
+                            {...field}
+                        />
+                        <FieldDescription>This is the name of your organization.</FieldDescription>
+                        <FieldError errors={fieldState.error ? [fieldState.error] : undefined} />
+                    </Field>
+                )}
+            />
+            <Controller
+                control={form.control}
+                name="slug"
+                render={({ field, fieldState }) => (
+                    <Field data-invalid={!!fieldState.error}>
+                        <FieldLabel htmlFor={field.name}>Organization Slug</FieldLabel>
+                        <Input
+                            id={field.name}
+                            placeholder="my-organization"
+                            {...field}
+                        />
+                        <FieldDescription>This is the unique identifier for your organization.</FieldDescription>
+                        <FieldError errors={fieldState.error ? [fieldState.error] : undefined} />
+                    </Field>
+                )}
+            />
+            <Button disabled={isLoading} type="submit">
+                {isLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                    "Create Organization"
                     )}
-                />
-                <FormField
-                    control={form.control}
-                    name="slug"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Organization Slug</FormLabel>
-                            <FormControl>
-                                <Input placeholder="my-organization" {...field} />
-                            </FormControl>
-                            <FormDescription>This is the unique identifier for your organization.</FormDescription>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <Button disabled={isLoading} type="submit">
-                    {isLoading ? (
-                        <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                        "Create Organization"
-                        )}
-                </Button>
-            </form>
-        </Form>
+            </Button>
+        </form>
     )
 }

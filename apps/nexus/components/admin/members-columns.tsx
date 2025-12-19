@@ -58,15 +58,13 @@ function PermissionsButton({ member }: { member: Member }) {
 
     return (
         <Dialog>
-            <DialogTrigger asChild>
-                <Button size="sm" variant="secondary" className="h-8">
-                    {totalPermissions === 1 ? 'Permission' : 'Permissions'}{' '}
-                    {totalPermissions > 0 && (
-                        <span className="ml-1">
-                            <ArrowUpRight strokeWidth="4" />
-                        </span>
-                    )}
-                </Button>
+            <DialogTrigger render={<Button size="sm" variant="secondary" className="h-8" />}>
+                {totalPermissions === 1 ? 'Permission' : 'Permissions'}{' '}
+                {totalPermissions > 0 && (
+                    <span className="ml-1">
+                        <ArrowUpRight strokeWidth="4" />
+                    </span>
+                )}
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
@@ -181,10 +179,8 @@ function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: Organi
                     </Badge>
                 ))}
                 <Dialog>
-                    <DialogTrigger asChild>
-                        <Badge variant="secondary" className="text-xs cursor-pointer">
-                            +
-                        </Badge>
+                    <DialogTrigger nativeButton={false} render={<Badge variant="secondary" className="text-xs cursor-pointer" />}>
+                        +
                     </DialogTrigger>
                     <DialogContent className="md:max-w-lg">
                         <DialogTitle>Add role(s) to the user</DialogTitle>

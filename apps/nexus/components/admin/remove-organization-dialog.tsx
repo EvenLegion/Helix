@@ -27,8 +27,8 @@ export function RemoveOrganizationDialog() {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="destructive" className="m-1 p-2">Remove Organization</Button>
+            <DialogTrigger render={<Button variant="destructive" className="m-1 p-2" />}>
+                Remove Organization
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>

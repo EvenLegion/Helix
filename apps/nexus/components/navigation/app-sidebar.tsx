@@ -33,18 +33,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
 
     return (
-        <Sidebar collapsible="offcanvas" {...props}>
+        <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            asChild
+                            render={<a href="#" />}
                             className="data-[slot=sidebar-menu-button]:!p-1.5"
                             >
-                            <a href="#">
-                                <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
-                                <span className="text-base font-semibold">Even Legion</span>
-                            </a>
+                            <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
+                            <span className="text-base font-semibold">Even Legion</span>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>

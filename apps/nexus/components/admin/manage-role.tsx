@@ -17,8 +17,8 @@ export function ManageRoleDialog() {
 
     return (
             <Dialog>
-                <DialogTrigger asChild>
-                    <Button className="mt-8 ml-4">Manage Roles</Button>
+                <DialogTrigger render={<Button className="mt-8 ml-4" />}>
+                    Manage Roles
                 </DialogTrigger>
                 <DialogContent className="md:max-w-lg">
                     <DialogHeader>

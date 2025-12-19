@@ -97,8 +97,9 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
                     <Field>
                         <FieldLabel htmlFor="role">Role(s)</FieldLabel>
                         <Popover open={open} onOpenChange={setOpen}>
-                            <PopoverTrigger asChild>
+                            <PopoverTrigger render={(props) => (
                                 <Button
+                                    {...props}
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={open}
@@ -140,7 +141,7 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
                                     )}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
-                            </PopoverTrigger>
+                            )} />
                             <PopoverContent className="w-full p-0">
                                 <div className="max-h-64 overflow-auto p-1">
                                     {roles

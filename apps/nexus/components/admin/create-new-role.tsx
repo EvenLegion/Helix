@@ -19,8 +19,8 @@ export function CreateNewRoleDialog() {
 
     return (
         <Dialog>
-            <DialogTrigger asChild>
-                <Button className="mt-9 ml-4">Create New Role</Button>
+            <DialogTrigger render={<Button className="mt-9 ml-4" />}>
+                Create New Role
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
