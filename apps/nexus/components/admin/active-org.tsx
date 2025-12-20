@@ -29,7 +29,9 @@ export default function ActiveOrg({
         }
     }, [activeOrg?.id]);
 
-    const handleOrgChange = async (organizationId: string) => {
+    const handleOrgChange = async (organizationId: string | null) => {
+        if (!organizationId) return;
+
         setSelectedOrg(organizationId);
         try {
             const { error } = await authClient.organization.setActive({
@@ -45,10 +47,14 @@ export default function ActiveOrg({
         }
     }
 
+    const selectedOrgName = organizations.find(org => org.id === selectedOrg)?.name;
+
     return (
         <Select onValueChange={handleOrgChange} value={selectedOrg}>
             <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Active Organization" />
+                <SelectValue>
+                    {selectedOrgName || "Select Active Organization"}
+                </SelectValue>
             </SelectTrigger>
             <SelectContent>
                 {organizations.map((org) => (

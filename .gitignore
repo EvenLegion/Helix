@@ -46,3 +46,4 @@ yarn-error.log*
 TODO.txt
 .github/copilot-instructions.md
 /apps/nexus/.claude/settings.local.json
+/apps/nexus/nul

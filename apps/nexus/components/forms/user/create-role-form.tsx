@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 import { z } from 'zod';
 import { statement } from '@/lib/auth/permissions';
+import { Badge } from '@workspace/ui/components/badge';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@workspace/ui/components/popover';
 import {
@@ -206,9 +207,9 @@ export function CreateRoleForm() {
                             <FieldError errors={fieldState.error ? [fieldState.error] : undefined} />
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {Array.from(selectedPermissions).map((perm) => (
-                                    <span key={perm} className="px-2 py-1 text-xs rounded-full bg-secondary">
+                                    <Badge key={perm} variant="secondary" className="px-2 py-1">
                                         {perm}
-                                    </span>
+                                    </Badge>
                                 ))}
                             </div>
                         </Field>
