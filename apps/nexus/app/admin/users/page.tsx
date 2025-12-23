@@ -55,7 +55,7 @@ export default async function Users() {
                     </CardFooter>
                 </Card>
                 <CreateNewRoleDialog />
-                <ManageRoleDialog />
+                <ManageRoleDialog roles={roles}/>
                 <Card className="mt-8 w-full">
                     <FilteredMembersTable allMembers={members} roles={roles} />
                 </Card>

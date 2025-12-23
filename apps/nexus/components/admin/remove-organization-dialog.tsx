@@ -37,7 +37,7 @@ export function RemoveOrganizationDialog() {
                         Are you sure you want to remove this organization? This action cannot be undone.
                     </DialogDescription>
                 </DialogHeader>
-                <Select>
+                <Select >
                     <SelectTrigger className="w-full">
 
                     </SelectTrigger>

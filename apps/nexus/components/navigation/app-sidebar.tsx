@@ -38,12 +38,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            render={<a href="#" />}
-                            className="data-[slot=sidebar-menu-button]:!p-1.5"
-                            >
-                            <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
-                            <span className="text-base font-semibold">Even Legion</span>
-                        </SidebarMenuButton>
+                            className="data-[slot=sidebar-menu-button]:!p-1.5 w-full"
+                            render={(props) => (
+                                <a {...props} href="#">
+                                    <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
+                                    <span className="text-base font-semibold">Even Legion</span>
+                                </a>
+                            )}
+                        />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
