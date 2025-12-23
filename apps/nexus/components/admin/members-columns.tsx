@@ -18,6 +18,7 @@ import { X, ArrowUpDown } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { statement } from '@/lib/auth/permissions';
 
 export type Member = {
     id: string;
@@ -50,11 +51,59 @@ const roleColors: Record<string, string> = {
     recruiter: 'bg-[#35665c] text-white border-[#35665c]',
 };
 
+// Get expected permissions for a role
+const getRolePermissions = (roleName: string, orgRoles: OrganizationRole[]): Array<{ category: string; permission: string }> => {
+    const normalizedRole = roleName.toLowerCase().trim();
+
+    // Handle owner role with hardcoded permissions
+    if (normalizedRole === 'owner') {
+        return Object.entries(statement).flatMap(([category, perms]) =>
+            (perms as readonly string[]).map((perm) => ({
+                category,
+                permission: perm,
+            })),
+        );
+    }
+
+    // Look up role in orgRoles
+    const orgRole = orgRoles.find(r => r.role.toLowerCase().trim() === normalizedRole);
+    if (!orgRole) return [];
+
+    try {
+        const parsed = JSON.parse(orgRole.permission);
+        return Object.entries(parsed).flatMap(([category, perms]) =>
+            (perms as string[]).map((perm) => ({
+                category,
+                permission: perm,
+            })),
+        );
+    } catch (error) {
+        console.error('Error parsing permissions for role:', orgRole.role, error);
+        return [];
+    }
+};
+
 // Permissions button component
-function PermissionsButton({ member }: { member: Member }) {
-    const groupedPerms = groupPermissions(member.permissions);
+function PermissionsButton({ member, orgRoles }: { member: Member; orgRoles?: OrganizationRole[] }) {
     const totalPermissions = member.permissions.length;
     const roles = member.role.split(',').map((r) => r.trim());
+
+    // Get permissions per role
+    const rolePermissionsMap = roles.map((role) => {
+        const expectedPerms = getRolePermissions(role, orgRoles || []);
+        const expectedPermsSet = new Set(expectedPerms.map(p => `${p.category}:${p.permission}`));
+
+        // Filter member permissions to only include those that match this role's expected permissions
+        const rolePerms = member.permissions.filter(p =>
+            expectedPermsSet.has(`${p.category}:${p.permission}`)
+        );
+
+        return {
+            role,
+            permissions: rolePerms,
+            grouped: groupPermissions(rolePerms),
+        };
+    });
 
     return (
         <Dialog>
@@ -72,17 +121,19 @@ function PermissionsButton({ member }: { member: Member }) {
                     <DialogDescription>Viewing permissions across all roles for this user</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 mt-4">
-                    {roles.map((role, roleIdx) => {
-                        // Filter permissions by role if needed, for now showing all
-                        return (
-                            <div key={roleIdx} className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className={`text-sm capitalize ${roleColors[role] || ''}`}>
-                                        {role}
-                                    </Badge>
-                                </div>
-                                <div className="space-y-3 pl-4 border-l-2">
-                                    {Object.entries(groupedPerms).map(([category, perms]) => (
+                    {rolePermissionsMap.map(({ role, permissions, grouped }, roleIdx) => (
+                        <div key={roleIdx} className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className={`text-sm capitalize ${roleColors[role.toLowerCase()] || ''}`}>
+                                    {role}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                    {permissions.length} permission{permissions.length !== 1 ? 's' : ''}
+                                </Badge>
+                            </div>
+                            <div className="space-y-3 pl-4 border-l-2">
+                                {Object.keys(grouped).length > 0 ? (
+                                    Object.entries(grouped).map(([category, perms]) => (
                                         <div key={category} className="space-y-2">
                                             <div className="font-semibold text-sm capitalize text-muted-foreground">
                                                 {category}
@@ -95,11 +146,18 @@ function PermissionsButton({ member }: { member: Member }) {
                                                 ))}
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    ))
+                                ) : (
+                                    <div className="text-sm text-muted-foreground">No permissions assigned</div>
+                                )}
                             </div>
-                        );
-                    })}
+                        </div>
+                    ))}
+                    {rolePermissionsMap.length === 0 && (
+                        <div className="text-center text-muted-foreground py-4">
+                            No roles assigned
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
@@ -269,7 +327,7 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
                     </Button>
                 );
             },
-            cell: ({ row }) => <PermissionsButton member={row.original} />,
+            cell: ({ row }) => <PermissionsButton member={row.original} orgRoles={roles} />,
             filterFn: (row, id, value) => {
                 const permissions = row.original.permissions;
                 return permissions.some(
