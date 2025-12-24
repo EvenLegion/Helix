@@ -1,4 +1,4 @@
-import { House, UserStar, Shield, ShieldUser } from 'lucide-react';
+import { House, UserStar, Shield, Building2, Users } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 
 export interface MenuItemContext {
@@ -32,6 +32,7 @@ export interface MenuGroup {
 
 // Page-specific header titles (optional overrides)
 export const pageHeaders: Record<string, string> = {
+    '/admin/organizations': 'Organization Management',
     '/admin/users': 'User Management',
     '/admin/dashboard': 'Admin Dashboard',
     '/admin/moderation': 'Moderation Tools',
@@ -85,12 +86,21 @@ export const menuItems = {
             },
         },
         {
-            title: 'Users',
-            url: '/admin/users',
-            icon: ShieldUser,
+            title: 'Organizations',
+            url: '/admin/organizations',
+            icon: Building2,
             requiresActiveOrg: true,
             requiredPermissions: {
                 member: ['read']
+            },
+        },
+        {
+            title: 'Users',
+            url: '/admin/users',
+            icon: Users,
+            requiresActiveOrg: false,
+            requiredPermissions: {
+                admin: ['admin_dashboard']
             },
         }
     ]

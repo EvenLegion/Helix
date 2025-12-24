@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useMemo } from "react";
 import { authClient } from "@/lib/auth-client";
 import { MembersTable } from '@/components/admin/members-table';
 import type { Member, User, Organization, OrganizationRole } from '@workspace/db'
@@ -36,66 +37,81 @@ const getOwnerPermissions = () => {
 };
 
 export function FilteredMembersTable({ allMembers, roles }: FilteredMembersTableProps) {
+    const [mounted, setMounted] = useState(false);
     const { data: activeOrg } = authClient.useActiveOrganization();
 
-    // Filter members by active organization
-    const filteredMembers = allMembers.filter(member =>
-        member.organizationId === activeOrg?.id
-    );
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
-    // Transform to match MembersTable interface (remove organizationId and organization fields)
-    const membersForTable = filteredMembers.map(member => {
-        const memberRoles = member.role.split(',').map((r) => normalizeRoleName(r));
+    // Memoize filtered and transformed members to prevent recalculation on every render
+    const membersForTable = useMemo(() => {
+        if (!activeOrg?.id) return [];
 
-        // Check if member has owner role
-        const hasOwnerRole = memberRoles.includes('owner');
+        // Filter members by active organization
+        const filteredMembers = allMembers.filter(member =>
+            member.organizationId === activeOrg.id
+        );
 
-        // Get roles for this organization
-        const rolesForThisOrg = roles.filter(r => r.organizationId === member.organizationId);
+        // Transform to match MembersTable interface (remove organizationId and organization fields)
+        return filteredMembers.map(member => {
+            const memberRoles = member.role.split(',').map((r) => normalizeRoleName(r));
 
-        // Filter organization roles that match the member's organization and roles
-        const matchingOrgRoles = rolesForThisOrg.filter((orgRole) => {
-            const normalizedOrgRole = normalizeRoleName(orgRole.role);
-            return memberRoles.includes(normalizedOrgRole);
-        });
+            // Check if member has owner role
+            const hasOwnerRole = memberRoles.includes('owner');
 
-        // Extract permissions from matching roles
-        let permissions = matchingOrgRoles.flatMap((orgRole) => {
-            try {
-                const parsed = JSON.parse(orgRole.permission);
-                // Convert to array of objects with category and permission
-                return Object.entries(parsed).flatMap(([category, perms]) =>
-                    (perms as string[]).map((perm) => ({
-                        category,
-                        permission: perm,
-                    })),
+            // Get roles for this organization
+            const rolesForThisOrg = roles.filter(r => r.organizationId === member.organizationId);
+
+            // Filter organization roles that match the member's organization and roles
+            const matchingOrgRoles = rolesForThisOrg.filter((orgRole) => {
+                const normalizedOrgRole = normalizeRoleName(orgRole.role);
+                return memberRoles.includes(normalizedOrgRole);
+            });
+
+            // Extract permissions from matching roles
+            let permissions = matchingOrgRoles.flatMap((orgRole) => {
+                try {
+                    const parsed = JSON.parse(orgRole.permission);
+                    // Convert to array of objects with category and permission
+                    return Object.entries(parsed).flatMap(([category, perms]) =>
+                        (perms as string[]).map((perm) => ({
+                            category,
+                            permission: perm,
+                        })),
+                    );
+                } catch (error) {
+                    console.error('Error parsing permissions for role:', orgRole.role, error);
+                    return [];
+                }
+            });
+
+            // If member has owner role, add owner permissions (they override/can be merged)
+            if (hasOwnerRole) {
+                const ownerPermissions = getOwnerPermissions();
+                // Merge owner permissions with existing permissions, avoiding duplicates
+                const existingPerms = new Set(permissions.map(p => `${p.category}:${p.permission}`));
+                const uniqueOwnerPerms = ownerPermissions.filter(
+                    p => !existingPerms.has(`${p.category}:${p.permission}`)
                 );
-            } catch (error) {
-                console.error('Error parsing permissions for role:', orgRole.role, error);
-                return [];
+                permissions = [...permissions, ...uniqueOwnerPerms];
             }
+
+            return {
+                id: member.id,
+                userId: member.userId,
+                role: member.role,
+                joinedAt: member.createdAt.toISOString(),
+                username: member.user.nickname || member.user.username || undefined,
+                permissions,
+                isAdmin: member.user.role === 'admin',
+            };
         });
+    }, [allMembers, roles, activeOrg?.id]);
 
-        // If member has owner role, add owner permissions (they override/can be merged)
-        if (hasOwnerRole) {
-            const ownerPermissions = getOwnerPermissions();
-            // Merge owner permissions with existing permissions, avoiding duplicates
-            const existingPerms = new Set(permissions.map(p => `${p.category}:${p.permission}`));
-            const uniqueOwnerPerms = ownerPermissions.filter(
-                p => !existingPerms.has(`${p.category}:${p.permission}`)
-            );
-            permissions = [...permissions, ...uniqueOwnerPerms];
-        }
-
-        return {
-            id: member.id,
-            userId: member.userId,
-            role: member.role,
-            joinedAt: member.createdAt.toISOString(),
-            username: member.user.nickname || member.user.username || undefined,
-            permissions,
-        };
-    });
+    if (!mounted) {
+        return null;
+    }
 
     return <MembersTable members={membersForTable} roles={roles} />;
 }

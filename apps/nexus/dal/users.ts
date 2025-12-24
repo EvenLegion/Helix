@@ -98,4 +98,22 @@ export class UserDAL {
             data,
         });
     }
+
+    /**
+     * Find all users with their memberships
+     */
+    static async findAll() {
+        return prisma.user.findMany({
+            include: {
+                Member: {
+                    include: {
+                        organization: true,
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+    }
 }

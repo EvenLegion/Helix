@@ -3,7 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import type { OrganizationRole } from '@workspace/db';
 import { Badge } from '@workspace/ui/components/badge';
-import { ArrowUpRight, UserCog, ArrowUpDown, Trash2, Loader2 } from 'lucide-react';
+import { ArrowUpRight, UserCog, ArrowUpDown, Trash2, Loader2, Users } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import {
     Dialog,
@@ -16,10 +16,10 @@ import {
 import { AddRoleForm } from '@/components/forms/user/add-role-form';
 import { statement } from '@/lib/auth/permissions';
 import { useState, useEffect } from 'react';
-import { checkPermissions } from '@/server/permissions';
 import { deleteMemberFromOrganization } from '@/server/organizations';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { authClient } from '@/lib/auth-client';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -40,6 +40,7 @@ export type Member = {
     joinedAt: string;
     username?: string;
     permissions: Array<{ category: string; permission: string }>;
+    isAdmin?: boolean;
 };
 
 // Group permissions by category
@@ -179,19 +180,8 @@ function PermissionsButton({ member, orgRoles }: { member: Member; orgRoles?: Or
 }
 
 // Role badge cell component
-function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: OrganizationRole[] }) {
+function RoleBadgeCell({ member, orgRoles, canUpdateRoles }: { member: Member; orgRoles?: OrganizationRole[]; canUpdateRoles: boolean }) {
     const roles = member.role.split(',').map((r) => r.trim());
-    const [canUpdateRoles, setCanUpdateRoles] = useState(false);
-
-    useEffect(() => {
-        const checkPermission = async () => {
-            const canUpdateRoles = await checkPermissions({
-                member: ['update']
-            });
-            setCanUpdateRoles(canUpdateRoles);
-        };
-        checkPermission();
-    }, []);
 
     return (
         <div className="flex flex-wrap gap-1">
@@ -220,20 +210,13 @@ function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: Organi
     );
 }
 
-function DeleteMemberButton({ member }: { member: Member }) {
-    const [canDelete, setCanDelete] = useState(false);
+function DeleteMemberButton({ member, canDelete }: { member: Member; canDelete: boolean }) {
     const [isDeleting, setIsDeleting] = useState(false);
     const router = useRouter();
 
-    useEffect(() => {
-        const checkPermission = async () => {
-            const canDelete = await checkPermissions({
-                member: ['delete']
-            });
-            setCanDelete(canDelete);
-        };
-        checkPermission();
-    }, []);
+    if (!canDelete) {
+        return null;
+    }
 
     const handleDelete = async () => {
         setIsDeleting(true);
@@ -280,7 +263,60 @@ function DeleteMemberButton({ member }: { member: Member }) {
     );
 }
 
-export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[] {
+function ImpersonateMemberButton({ member, canImpersonate }: { member: Member; canImpersonate: boolean }) {
+    const [isImpersonating, setIsImpersonating] = useState(false);
+    const router = useRouter();
+
+    if (!canImpersonate) {
+        return null;
+    }
+
+    const handleImpersonate = async () => {
+        setIsImpersonating(true);
+        try {
+            const result = await authClient.admin.impersonateUser({
+                userId: member.userId,
+            });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || 'Failed to impersonate user');
+                return;
+            }
+
+            toast.success(`Now impersonating ${member.username || member.userId}`);
+            router.refresh();
+            // Full page reload to ensure session is updated
+            window.location.reload();
+        } catch (error) {
+            console.error('Failed to impersonate user:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to impersonate user');
+        } finally {
+            setIsImpersonating(false);
+        }
+    };
+
+    return (
+        <Button
+            size="sm"
+            variant="secondary"
+            className="h-8"
+            onClick={handleImpersonate}
+            disabled={isImpersonating}
+            title={`Impersonate ${member.username || member.userId}`}
+        >
+            {isImpersonating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+                <Users className="h-4 w-4" />
+            )}
+        </Button>
+    );
+}
+
+export function getMembersColumns(
+    roles: OrganizationRole[],
+    permissions: { canUpdateRoles: boolean; canDelete: boolean; canImpersonate: boolean }
+): ColumnDef<Member>[] {
     return [
         {
             accessorKey: 'userId',
@@ -305,6 +341,7 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
                     </Button>
                 );
             },
+            cell: ({ row }) => <div className="font-medium">{row.getValue('username') || row.original.userId}</div>,
         },
         {
             accessorKey: 'role',
@@ -316,7 +353,7 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
                     </Button>
                 );
             },
-            cell: ({ row }) => <RoleBadgeCell member={row.original} orgRoles={roles} />,
+            cell: ({ row }) => <RoleBadgeCell member={row.original} orgRoles={roles} canUpdateRoles={permissions.canUpdateRoles} />,
             filterFn: (row, id, value) => {
                 return row.getValue<string>(id).toLowerCase().includes(value.toLowerCase());
             },
@@ -365,7 +402,8 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
                 );
             },
             cell: ({ row }) => <div className="flex flex-wrap gap-1">
-                <DeleteMemberButton member={row.original} />
+                <DeleteMemberButton member={row.original} canDelete={permissions.canDelete} />
+                <ImpersonateMemberButton member={row.original} canImpersonate={permissions.canImpersonate} />
             </div>
         }
     ];

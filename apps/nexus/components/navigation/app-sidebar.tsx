@@ -30,6 +30,7 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { data: session, isPending } = authClient.useSession();
     const { data: activeOrg } = authClient.useActiveOrganization();
+    const [mounted, setMounted] = React.useState(false);
 
     const hasActiveOrg = !!activeOrg;
 
@@ -38,6 +39,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [filteredNavAuthenticated, setFilteredNavAuthenticated] = React.useState<typeof data.navAuthenticated>([]);
     const [filteredNavAdmin, setFilteredNavAdmin] = React.useState<typeof data.navAdmin>([]);
     const [isFiltering, setIsFiltering] = React.useState(true);
+
+    // Mark as mounted after hydration to prevent mismatch
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Permission checking function using server action
     const hasPermission = React.useCallback(async (permissions: Record<string, string[]>): Promise<boolean> => {
@@ -139,27 +145,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 )}
             </SidebarContent>
             <SidebarFooter>
-                {isPending ? (
-                    // Show skeleton for user profile loading
-                    <div className="flex h-full w-full items-center justify-center">
-                        <div className="flex w-full items-center gap-3">
-                            <Skeleton className="h-8 w-8 rounded-lg" />
-                            <div className="flex flex-1 flex-col gap-1">
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-3 w-32" />
-                            </div>
-                            <Skeleton className="h-4 w-4" />
-                        </div>
-                    </div>
+                {!mounted ? (
+                    // Don't render anything during SSR to prevent hydration mismatch
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton size="lg" disabled>
+                                <div className="h-8 w-8 rounded-lg bg-muted animate-pulse" />
+                                <div className="flex flex-1 flex-col gap-1 text-left">
+                                    <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                                    <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+                                </div>
+                                <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                ) : isPending ? (
+                    // Show skeleton for user profile loading - must match NavUser structure
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton size="lg" disabled>
+                                <div className="h-8 w-8 rounded-lg bg-muted animate-pulse" />
+                                <div className="flex flex-1 flex-col gap-1 text-left">
+                                    <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                                    <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+                                </div>
+                                <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
                 ) : session?.user ? (
-                    <div className="flex h-full w-full items-center justify-center">
-                        <NavUser user={{
-                            email: session.user.email ?? '',
-                            // @ts-expect-error user.nickname is a valid property
-                            username: session.user.nickname ?? session.user.username,
-                            avatar: session.user.image ?? 'https://github.com/shadcn.png'
-                        }} />
-                    </div>
+                    <NavUser user={{
+                        email: session.user.email ?? '',
+                        // @ts-expect-error user.nickname is a valid property
+                        username: session.user.nickname ?? session.user.username,
+                        avatar: session.user.image ?? 'https://github.com/shadcn.png'
+                    }} />
                 ) : (
                     <SidebarMenu>
                         <SidebarMenuItem>
