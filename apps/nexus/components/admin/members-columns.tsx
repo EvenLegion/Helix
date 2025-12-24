@@ -3,7 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import type { OrganizationRole } from '@workspace/db';
 import { Badge } from '@workspace/ui/components/badge';
-import { ArrowUpRight, UserCog } from 'lucide-react';
+import { ArrowUpRight, UserCog, ArrowUpDown, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import {
     Dialog,
@@ -14,9 +14,24 @@ import {
     DialogTrigger,
 } from '@workspace/ui/components/dialog';
 import { AddRoleForm } from '@/components/forms/user/add-role-form';
-import { ArrowUpDown } from 'lucide-react';
-import { authClient } from '@/lib/auth-client';
 import { statement } from '@/lib/auth/permissions';
+import { useState, useEffect } from 'react';
+import { checkPermissions } from '@/server/permissions';
+import { deleteMemberFromOrganization } from '@/server/organizations';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@workspace/ui/components/alert-dialog';
+
 
 export type Member = {
     id: string;
@@ -166,6 +181,17 @@ function PermissionsButton({ member, orgRoles }: { member: Member; orgRoles?: Or
 // Role badge cell component
 function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: OrganizationRole[] }) {
     const roles = member.role.split(',').map((r) => r.trim());
+    const [canUpdateRoles, setCanUpdateRoles] = useState(false);
+
+    useEffect(() => {
+        const checkPermission = async () => {
+            const canUpdateRoles = await checkPermissions({
+                member: ['update']
+            });
+            setCanUpdateRoles(canUpdateRoles);
+        };
+        checkPermission();
+    }, []);
 
     return (
         <div className="flex flex-wrap gap-1">
@@ -179,9 +205,9 @@ function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: Organi
                 </Badge>
             ))}
             <Dialog>
-                <DialogTrigger nativeButton={false} render={<Badge variant="secondary" className="text-xs cursor-pointer" />}>
+                {canUpdateRoles && <DialogTrigger nativeButton={false} render={<Badge variant="secondary" className="text-xs cursor-pointer" />}>
                     <UserCog strokeWidth={3} />
-                </DialogTrigger>
+                </DialogTrigger>}
                 <DialogContent className="md:max-w-lg">
                     <DialogTitle>Manage roles for user</DialogTitle>
                     <DialogDescription className="mb-4">
@@ -191,6 +217,66 @@ function RoleBadgeCell({ member, orgRoles }: { member: Member; orgRoles?: Organi
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+function DeleteMemberButton({ member }: { member: Member }) {
+    const [canDelete, setCanDelete] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const router = useRouter();
+
+    useEffect(() => {
+        const checkPermission = async () => {
+            const canDelete = await checkPermissions({
+                member: ['delete']
+            });
+            setCanDelete(canDelete);
+        };
+        checkPermission();
+    }, []);
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await deleteMemberFromOrganization(member.id);
+            toast.success('Member deleted successfully');
+            router.refresh();
+        } catch (error) {
+            console.error('Failed to delete member:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to delete member');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    return (
+        <AlertDialog>
+            <AlertDialogTrigger render={
+                <Button size="sm" variant="destructive" className="h-8" >
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            } />
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Member</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Are you sure you want to remove {member.username || member.userId} from the organization?
+                        This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        disabled={isDeleting}
+                        onClick={handleDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                        {isDeleting && <span className="mr-2"><Loader2 /></span>}
+                        {isDeleting ? 'Removing...' : 'Remove Member'}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
@@ -268,5 +354,19 @@ export function getMembersColumns(roles: OrganizationRole[]): ColumnDef<Member>[
             },
             cell: ({ row }) => new Date(row.getValue('joinedAt')).toLocaleDateString(),
         },
+        {
+            accessorKey: 'actions',
+            header: ({ column }) => {
+                return (
+                    <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                        Actions
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                );
+            },
+            cell: ({ row }) => <div className="flex flex-wrap gap-1">
+                <DeleteMemberButton member={row.original} />
+            </div>
+        }
     ];
 }

@@ -141,7 +141,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarFooter>
                 {isPending ? (
                     // Show skeleton for user profile loading
-                    <div className="flex h-full w-full items-center justify-center p-2">
+                    <div className="flex h-full w-full items-center justify-center">
                         <div className="flex w-full items-center gap-3">
                             <Skeleton className="h-8 w-8 rounded-lg" />
                             <div className="flex flex-1 flex-col gap-1">

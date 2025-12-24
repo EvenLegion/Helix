@@ -2,6 +2,10 @@
 
 import { prisma } from "@workspace/db";
 import { getCurrentUser } from "./users";
+import { OrganizationDAL } from "@/dal/organizations";
+import { MemberDAL } from "@/dal/members";
+import { RoleDAL } from "@/dal/roles";
+import { UserDAL } from "@/dal/users";
 
 export async function getOrganizations() {
     const { currentUser } = await getCurrentUser();
@@ -10,29 +14,17 @@ export async function getOrganizations() {
 }
 
 export async function getAllOrganizations() {
-    const orgs = prisma.organization.findMany();
-
-    return (orgs);
+    return OrganizationDAL.findAll();
 }
 
 export async function getActiveOrganization(userId: string) {
-    const memberUser = await prisma.member.findFirst({
-        where: {
-            userId: userId
-        }
-    });
+    const memberUser = await MemberDAL.findByUserId(userId);
 
     if (!memberUser) {
         return null;
     }
 
-    const activeOrganization = await prisma.organization.findFirst({
-        where: {
-            id: memberUser.organizationId
-        }
-    });
-
-    return activeOrganization;
+    return OrganizationDAL.findById(memberUser.organizationId);
 }
 
 export async function updateOrganizationRole(
@@ -47,28 +39,14 @@ export async function updateOrganizationRole(
     }
 
     // Verify the role belongs to the organization
-    const existingRole = await prisma.organizationRole.findFirst({
-        where: {
-            id: roleId,
-            organizationId: organizationId,
-        },
-    });
+    const existingRole = await RoleDAL.findByIdAndOrganizationId(roleId, organizationId);
 
     if (!existingRole) {
         throw new Error('Role not found or does not belong to this organization');
     }
 
     // Update the role with new permissions
-    const updatedRole = await prisma.organizationRole.update({
-        where: {
-            id: roleId,
-        },
-        data: {
-            permission: JSON.stringify(permission),
-        },
-    });
-
-    return updatedRole;
+    return RoleDAL.updatePermissions(roleId, permission);
 }
 
 export async function deleteOrganization(organizationId: string) {
@@ -79,23 +57,17 @@ export async function deleteOrganization(organizationId: string) {
     }
 
     // Verify user is a member of this organization
-    const member = await prisma.member.findFirst({
-        where: {
-            userId: currentUser.id,
-            organizationId: organizationId,
-        },
-    });
+    const member = await MemberDAL.findByUserIdAndOrganizationId(
+        currentUser.id,
+        organizationId
+    );
 
     if (!member) {
         throw new Error('You are not a member of this organization');
     }
 
     // Delete the organization (cascade will handle members, invitations, and roles)
-    await prisma.organization.delete({
-        where: {
-            id: organizationId,
-        },
-    });
+    await OrganizationDAL.delete(organizationId);
 
     return { success: true };
 }
@@ -111,26 +83,17 @@ export async function deleteOrganizationRole(
     }
 
     // Verify the role belongs to the organization
-    const existingRole = await prisma.organizationRole.findFirst({
-        where: {
-            id: roleId,
-            organizationId: organizationId,
-        },
-    });
+    const existingRole = await RoleDAL.findByIdAndOrganizationId(roleId, organizationId);
 
     if (!existingRole) {
         throw new Error('Role not found or does not belong to this organization');
     }
 
     // Check if any members are using this role
-    const membersUsingRole = await prisma.member.findMany({
-        where: {
-            organizationId: organizationId,
-            role: {
-                contains: existingRole.role,
-            },
-        },
-    });
+    const membersUsingRole = await MemberDAL.findByOrganizationIdWithRole(
+        organizationId,
+        existingRole.role
+    );
 
     // Filter to only members that actually have this role (since role is comma-separated)
     const membersWithRole = membersUsingRole.filter(member => {
@@ -145,11 +108,7 @@ export async function deleteOrganizationRole(
     }
 
     // Delete the role
-    await prisma.organizationRole.delete({
-        where: {
-            id: roleId,
-        },
-    });
+    await RoleDAL.delete(roleId);
 
     return { success: true };
 }
@@ -164,31 +123,7 @@ export async function searchUsers(query: string) {
         throw new Error('Unauthorized');
     }
 
-    if (!query || query.trim().length < 2) {
-        return [];
-    }
-
-    const searchTerm = query.trim().toLowerCase();
-
-    const users = await prisma.user.findMany({
-        where: {
-            OR: [
-                { email: { contains: searchTerm, mode: 'insensitive' } },
-                { username: { contains: searchTerm, mode: 'insensitive' } },
-                { nickname: { contains: searchTerm, mode: 'insensitive' } },
-            ],
-        },
-        take: 10,
-        select: {
-            id: true,
-            email: true,
-            username: true,
-            nickname: true,
-            image: true,
-        },
-    });
-
-    return users;
+    return UserDAL.search(query);
 }
 
 /**
@@ -206,33 +141,27 @@ export async function addUserToOrganization(
     }
 
     // Verify current user is a member of the organization
-    const currentUserMember = await prisma.member.findFirst({
-        where: {
-            userId: currentUser.id,
-            organizationId: organizationId,
-        },
-    });
+    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
+        currentUser.id,
+        organizationId
+    );
 
     if (!currentUserMember) {
         throw new Error('You are not a member of this organization');
     }
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-    });
+    const user = await UserDAL.findById(userId);
 
     if (!user) {
         throw new Error('User not found');
     }
 
     // Check if user is already a member of this organization
-    const existingMember = await prisma.member.findFirst({
-        where: {
-            userId: userId,
-            organizationId: organizationId,
-        },
-    });
+    const existingMember = await MemberDAL.findByUserIdAndOrganizationId(
+        userId,
+        organizationId
+    );
 
     if (existingMember) {
         throw new Error('User is already a member of this organization');
@@ -240,12 +169,7 @@ export async function addUserToOrganization(
 
     // Verify the role exists for this organization (if it's not "owner")
     if (role !== 'owner') {
-        const orgRole = await prisma.organizationRole.findFirst({
-            where: {
-                organizationId: organizationId,
-                role: role,
-            },
-        });
+        const orgRole = await RoleDAL.findByRoleNameAndOrganizationId(role, organizationId);
 
         if (!orgRole) {
             throw new Error(`Role "${role}" does not exist in this organization`);
@@ -253,17 +177,51 @@ export async function addUserToOrganization(
     }
 
     // Create the member
-    const member = await prisma.member.create({
-        data: {
-            userId: userId,
-            organizationId: organizationId,
-            role: role,
-        },
-        include: {
-            user: true,
-            organization: true,
-        },
+    const member = await MemberDAL.create({
+        userId,
+        organizationId,
+        role,
     });
 
     return member;
+}
+
+export async function deleteMemberFromOrganization(memberId: string) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        throw new Error('Unauthorized');
+    }
+
+    // Find the member to be removed
+    const memberToRemove = await MemberDAL.findById(memberId);
+
+    if (!memberToRemove) {
+        throw new Error('Member not found');
+    }
+
+    // Verify the member belongs to the organization
+    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
+        currentUser.id,
+        memberToRemove.organizationId
+    );
+
+    if (!currentUserMember) {
+        throw new Error('You are not a member of this organization');
+    }
+
+    // Prevent users from removing themselves
+    if (currentUserMember.userId === memberToRemove.userId) {
+        throw new Error('You cannot remove yourself from the organization');
+    }
+
+    // Prevent from removing the owner
+    if (memberToRemove.role === 'owner') {
+        throw new Error('You cannot remove the owner from the organization');
+    }
+
+    // Delete the member
+    await MemberDAL.delete(memberId);
+
+    return { success: true };
 }

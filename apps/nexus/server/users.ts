@@ -3,7 +3,8 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { prisma } from "@workspace/db";
+import { UserDAL } from "@/dal/users";
+import { MemberDAL } from "@/dal/members";
 
 export const getCurrentUser = async () => {
 
@@ -25,16 +26,7 @@ export const getCurrentUser = async () => {
         }
     }
 
-    const currentUser = await prisma.user.findUnique({
-        where: { id: session?.user.id },
-        include: {
-            Member: {
-                include: {
-                    organization: true,
-                }
-            }
-        }
-    });
+    const currentUser = await UserDAL.findByIdWithMemberships(session?.user.id!);
 
     if (!currentUser) {
         // No session, redirect to Discord OAuth
@@ -47,14 +39,11 @@ export const getCurrentUser = async () => {
 
         if (signInResponse?.url) {
             redirect(signInResponse.url);
-
         }
+        throw new Error('User not found');
     }
 
-    const member = await prisma.member.findFirst({
-        where: { userId: currentUser?.id },
-        include: { organization: true }
-    });
+    const member = await MemberDAL.findByUserId(currentUser.id);
 
     return {
         ...session,
