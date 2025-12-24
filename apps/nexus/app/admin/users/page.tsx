@@ -51,7 +51,7 @@ export default async function Users() {
                     </CardContent>
                     <CardFooter>
                         <CreateOrganizationDialog />
-                        {organizations.length > 1 && <RemoveOrganizationDialog />}
+                        {organizations.length > 1 && <RemoveOrganizationDialog organizations={organizations} />}
                     </CardFooter>
                 </Card>
                 <CreateNewRoleDialog />
