@@ -1,5 +1,6 @@
 import { House, UserStar, Shield, Building2, Users } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
 
 export interface MenuItemContext {
     hasActiveOrg: boolean;
@@ -99,8 +100,27 @@ export const menuItems = {
             url: '/admin/users',
             icon: Users,
             requiresActiveOrg: false,
-            requiredPermissions: {
-                admin: ['admin_dashboard']
+            condition: async (context: MenuItemContext) => {
+                // Check admin plugin permissions for user:list
+                // This ensures we're checking admin roles, not organization permissions
+                try {
+                    const result = await authClient.admin.hasPermission({
+                        permissions: { user: ['list'] }
+                    });
+
+                    if ('error' in result && result.error) {
+                        return false;
+                    }
+
+                    if ('data' in result) {
+                        return result.data.success ?? false;
+                    }
+
+                    return false;
+                } catch (error) {
+                    console.error('Error checking admin permission for Users menu:', error);
+                    return false;
+                }
             },
         }
     ]

@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { organizationClient, adminClient } from "better-auth/client/plugins";
-import { ac, owner } from "@/lib/auth/permissions";
+import { ac, owner, adminRole, moderator } from "@/lib/auth/permissions";
 
 export const authClient = createAuthClient({
     plugins: [
@@ -13,7 +13,13 @@ export const authClient = createAuthClient({
                 enabled: true,
             },
         }),
-        adminClient()
+        adminClient({
+            ac,
+            roles: {
+                admin: adminRole,
+                moderator,
+            },
+        })
     ],
     baseURL: process.env.NODE_ENV === 'production'
         ? 'http://localhost:3000'

@@ -35,7 +35,7 @@ export function MembersTable({
                     authClient.organization.hasPermission({
                         permissions: { member: ['delete'] }
                     }),
-                    authClient.organization.hasPermission({
+                    authClient.admin.hasPermission({
                         permissions: { user: ['impersonate'] }
                     }),
                 ]);

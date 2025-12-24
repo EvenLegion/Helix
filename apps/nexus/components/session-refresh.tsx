@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 /**
@@ -14,13 +14,20 @@ import { useRouter } from "next/navigation";
  */
 export function SessionRefresh() {
     const router = useRouter();
+    const hasRefreshed = useRef(false);
 
     useEffect(() => {
-        // Refresh the router on mount to force server-side revalidation
-        // This ensures permissions are recalculated from the database
-        // The dynamicAccessControl feature will check permissions dynamically on each request
-        router.refresh();
-    }, [router]); // Only run on mount
+        // Only refresh once on mount to prevent redirect loops
+        if (!hasRefreshed.current) {
+            hasRefreshed.current = true;
+            // Use a small delay to avoid conflicts with initial page load
+            const timeoutId = setTimeout(() => {
+                router.refresh();
+            }, 100);
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [router]);
 
     return null; // This component doesn't render anything
 }

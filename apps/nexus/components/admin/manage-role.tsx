@@ -319,7 +319,13 @@ export function ManageRoleDialog({ roles }: ManageRoleDialogProps) {
                                     {fields.map((field, appIndex) => {
                                         const application = form.watch(`applicationPermissions.${appIndex}.application`);
                                         const permissions = form.watch(`applicationPermissions.${appIndex}.permissions`);
-                                        const availablePermissions = statement[application] as readonly string[];
+                                        const availablePermissions = statement[application] as readonly string[] | undefined;
+
+                                        // Skip rendering if application is not in statement
+                                        if (!availablePermissions) {
+                                            return null;
+                                        }
+
                                         const selectedPermissionsSet = new Set(permissions);
                                         const allSelected = permissions.length === availablePermissions.length;
                                         const someSelected = permissions.length > 0 && permissions.length < availablePermissions.length;

@@ -2,11 +2,12 @@ import { UserDAL } from '@/dal/users';
 import { Card, CardHeader, CardTitle, CardContent } from '@workspace/ui/components/card';
 import { checkPermissions } from '@/server/permissions';
 import { UsersTable } from '@/components/admin/users-table';
+import { authClient } from '@/lib/auth-client';
 
 export default async function Users() {
     // Check if user has permission to view all users
-    const canViewUsers = await checkPermissions({
-        admin: ['admin_dashboard']
+    const canViewUsers = await authClient.admin.hasPermission({
+        permissions: { user: ['list'] }
     });
 
     if (!canViewUsers) {

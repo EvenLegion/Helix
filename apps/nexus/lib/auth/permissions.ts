@@ -20,4 +20,14 @@ const owner = ac.newRole({
     recruitment: ['accept', 'reject', 'update', 'delete']
 });
 
-export { ac, owner, statement };
+// Admin role for admin plugin - has all admin permissions including impersonate
+const adminRole = ac.newRole({
+    ...adminAc.statements,
+    user: ['impersonate', 'ban', 'list'],
+});
+
+const moderator = ac.newRole({
+    user: ['ban', 'list'],
+});
+
+export { ac, owner, adminRole, moderator, statement };
