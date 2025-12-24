@@ -13,18 +13,75 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
 } from "@workspace/ui/components/sidebar";
-import { NavMain } from "@/components/navigation/nav-main";
+import { Skeleton } from "@workspace/ui/components/skeleton";
+import { NavGroup } from "@/components/navigation/nav-group";
 import { NavUser } from "@/components/navigation/nav-user";
-import { NavAdmin } from "@/components/navigation/nav-admin";
 import { authClient } from "@/lib/auth-client";
 import { getMenuItemsByGroup } from "@/lib/menu-config";
+import { filterMenuItems } from "@/lib/utils/filter-menu-items";
+import { checkPermissions } from "@/server/permissions";
+
 const data = {
     navMain: getMenuItemsByGroup('navMain'),
     navAdmin: getMenuItemsByGroup('navAdmin'),
+    navAuthenticated: getMenuItemsByGroup('navAuthenticated'),
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { data: session, isPending } = authClient.useSession();
+    const { data: activeOrg } = authClient.useActiveOrganization();
+
+    const hasActiveOrg = !!activeOrg;
+
+    // State for filtered menu items
+    const [filteredNavMain, setFilteredNavMain] = React.useState<typeof data.navMain>([]);
+    const [filteredNavAuthenticated, setFilteredNavAuthenticated] = React.useState<typeof data.navAuthenticated>([]);
+    const [filteredNavAdmin, setFilteredNavAdmin] = React.useState<typeof data.navAdmin>([]);
+    const [isFiltering, setIsFiltering] = React.useState(true);
+
+    // Permission checking function using server action
+    const hasPermission = React.useCallback(async (permissions: Record<string, string[]>): Promise<boolean> => {
+        if (!session?.user) {
+            return false;
+        }
+
+        return checkPermissions(permissions);
+    }, [session?.user]);
+
+    // Filter menu items based on conditions (including permissions)
+    React.useEffect(() => {
+        const filterItems = async () => {
+            setIsFiltering(true);
+            try {
+                const context = {
+                    hasActiveOrg,
+                    hasPermission,
+                };
+
+                const [main, authenticated, admin] = await Promise.all([
+                    filterMenuItems(data.navMain, context),
+                    filterMenuItems(data.navAuthenticated, context),
+                    filterMenuItems(data.navAdmin, context),
+                ]);
+
+                setFilteredNavMain(main);
+                setFilteredNavAuthenticated(authenticated);
+                setFilteredNavAdmin(admin);
+            } catch (error) {
+                console.error('Error filtering menu items:', error);
+                // On error, show no items for security
+                setFilteredNavMain([]);
+                setFilteredNavAuthenticated([]);
+                setFilteredNavAdmin([]);
+            } finally {
+                setIsFiltering(false);
+            }
+        };
+
+        // Always filter items - the filter logic handles authentication state
+        // Items with condition: ({ hasActiveOrg }) => !hasActiveOrg will show when not authenticated
+        filterItems();
+    }, [hasActiveOrg, hasPermission, session?.user]);
 
     const onSignIn = async () => {
         await authClient.signIn.social({
@@ -50,12 +107,50 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                <NavMain items={data.navMain} />
-                <NavAdmin items={data.navAdmin} />
+                {(isPending || isFiltering) ? (
+                    // Show skeleton loading state
+                    <div className="flex flex-col gap-4 p-2">
+                        <div className="flex flex-col gap-2">
+                            <Skeleton className="h-4 w-20" />
+                            <div className="flex flex-col gap-1">
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-8 w-3/4" />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Render main navigation (Welcome, Recruitment) when no active org */}
+                        {filteredNavMain.length > 0 && (
+                            <NavGroup items={filteredNavMain} />
+                        )}
+
+                        {/* Render authenticated navigation (Dashboard) when in org */}
+                        {filteredNavAuthenticated.length > 0 && (
+                            <NavGroup items={filteredNavAuthenticated} />
+                        )}
+
+                        {/* Render admin navigation when in org */}
+                        {filteredNavAdmin.length > 0 && (
+                            <NavGroup title="Administration" items={filteredNavAdmin} />
+                        )}
+                    </>
+                )}
             </SidebarContent>
             <SidebarFooter>
                 {isPending ? (
-                    <div className="flex h-full w-full items-center justify-center">Loading...</div>
+                    // Show skeleton for user profile loading
+                    <div className="flex h-full w-full items-center justify-center p-2">
+                        <div className="flex w-full items-center gap-3">
+                            <Skeleton className="h-8 w-8 rounded-lg" />
+                            <div className="flex flex-1 flex-col gap-1">
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-3 w-32" />
+                            </div>
+                            <Skeleton className="h-4 w-4" />
+                        </div>
+                    </div>
                 ) : session?.user ? (
                     <div className="flex h-full w-full items-center justify-center">
                         <NavUser user={{
@@ -71,7 +166,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             <SidebarMenuButton
                                 className="data-[slot=sidebar-menu-button]:!p-1.5"
                                 onClick={onSignIn}
-                                >
+                            >
                                 <LogIn className="!size-4" />
                                 Sign In
                             </SidebarMenuButton>

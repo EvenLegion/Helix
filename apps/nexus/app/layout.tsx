@@ -10,6 +10,7 @@ import React from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 import { SiteHeader } from "@/components/navigation/site-header";
+import { SessionRefresh } from "@/components/session-refresh";
 
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({ children } : {children: React.ReactNode}) {
             enableSystem
             disableTransitionOnChange
         >
+            <SessionRefresh />
             <SidebarProvider
                 style={
                     {

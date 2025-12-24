@@ -19,7 +19,7 @@ export function CreateNewRoleDialog() {
 
     return (
         <Dialog>
-            <DialogTrigger render={<Button className="mt-9 ml-4" />}>
+            <DialogTrigger render={<Button />}>
                 Create New Role
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">

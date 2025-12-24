@@ -146,7 +146,7 @@ export const auth = betterAuth({
     }
 });
 
-async function updateUserData(account:Account) {
+async function updateUserData(account: Account) {
     if (account.providerId === 'discord' && account.accessToken) {
         try {
             const guildId = process.env.GUILD_ID;

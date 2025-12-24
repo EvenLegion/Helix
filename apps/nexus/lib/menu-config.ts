@@ -1,10 +1,28 @@
 import { House, UserStar, Shield, ShieldUser } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 
+export interface MenuItemContext {
+    hasActiveOrg: boolean;
+    // Function to check if user has specific permissions
+    // Returns a promise that resolves to true if user has the permissions
+    hasPermission: (permissions: Record<string, string[]>) => Promise<boolean>;
+}
+
 export interface MenuItem {
     title: string;
     url: string;
     icon?: LucideIcon;
+    // Require active organization to show this item
+    requiresActiveOrg?: boolean;
+    // Optional: require specific permissions to see this item
+    // Format: { category: ['permission1', 'permission2'] }
+    // Example: { member: ['create'] } or { admin: ['admin_dashboard'] }
+    requiredPermissions?: Record<string, string[]>;
+    // Optional custom condition function for complex logic
+    // Receives context with hasActiveOrg and hasPermission function
+    // Return true to show the item, false to hide it
+    // Can be async if you need to check permissions
+    condition?: (context: MenuItemContext) => boolean | Promise<boolean>;
 }
 
 export interface MenuGroup {
@@ -21,45 +39,71 @@ export const pageHeaders: Record<string, string> = {
 };
 
 export const menuItems = {
+    // Navigation items for users not in an organization
     navMain: [
         {
             title: 'Welcome',
             url: '/',
-            icon: House
+            icon: House,
+            condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },
         {
             title: 'Recruitment',
             url: '/recruitment',
-            icon: House
+            icon: House,
+            condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },
     ],
+    // Navigation items for users in an organization
+    navAuthenticated: [
+        {
+            title: 'Dashboard',
+            url: '/dashboard',
+            icon: House,
+            requiresActiveOrg: true,
+            // No permissions required, just needs to be in org
+        }
+    ],
+    // Admin navigation items (shown only when in organization and with proper permissions)
     navAdmin: [
         {
             title: 'Dashboard',
             url: '/admin/dashboard',
-            icon: UserStar
+            icon: UserStar,
+            requiresActiveOrg: true,
+            requiredPermissions: {
+                admin: ['admin_dashboard']
+            },
         },
         {
             title: 'Moderation',
             url: '/admin/moderation',
-            icon: Shield
+            icon: Shield,
+            requiresActiveOrg: true,
+            requiredPermissions: {
+                admin: ['admin_dashboard']
+            },
         },
         {
             title: 'Users',
             url: '/admin/users',
-            icon: ShieldUser
+            icon: ShieldUser,
+            requiresActiveOrg: true,
+            requiredPermissions: {
+                member: ['read']
+            },
         }
     ]
 };
 
 // Helper function to get all menu items as flat array
 export function getAllMenuItems(): MenuItem[] {
-    return Object.values(menuItems).flat()
+    return Object.values(menuItems).flat() as MenuItem[]
 }
 
 // Helper function to get menu items by group
 export function getMenuItemsByGroup(groupName: keyof typeof menuItems): MenuItem[] {
-    return menuItems[groupName] || []
+    return (menuItems[groupName] || []) as MenuItem[]
 }
 
 export function getMenuItemByPath(pathname: string): MenuItem | undefined {

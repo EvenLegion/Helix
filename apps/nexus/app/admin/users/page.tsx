@@ -4,6 +4,7 @@ import { getOrganizations } from 'server/organizations';
 import { CreateOrganizationDialog } from '@/components/admin/create-organization-dialog';
 import { CreateNewRoleDialog } from '@/components/admin/create-new-role';
 import { ManageRoleDialog } from '@/components/admin/manage-role';
+import { AddUserDialog } from '@/components/admin/add-user-dialog';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@workspace/ui/components/card';
 import { FilteredMembersTable } from '@/components/admin/filtered-members-table';
 import ActiveOrg from '@/components/admin/active-org';
@@ -54,9 +55,12 @@ export default async function Users() {
                         {organizations.length > 1 && <RemoveOrganizationDialog organizations={organizations} />}
                     </CardFooter>
                 </Card>
-                <CreateNewRoleDialog />
-                <ManageRoleDialog roles={roles}/>
-                <Card className="mt-8 w-full">
+                <div className="flex gap-2 mt-8 ml-4">
+                    <CreateNewRoleDialog />
+                    <ManageRoleDialog roles={roles}/>
+                    <AddUserDialog roles={roles} />
+                </div>
+                <Card className="mt-4 w-full">
                     <FilteredMembersTable allMembers={members} roles={roles} />
                 </Card>
             </div>

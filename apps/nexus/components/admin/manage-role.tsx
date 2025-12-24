@@ -39,13 +39,13 @@ import {
     SelectValue,
     SelectItem,
 } from '@workspace/ui/components/select';
-import { Loader2, Check, X, ChevronDown, Plus } from 'lucide-react';
+import { Loader2, Check, X, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { Controller } from 'react-hook-form';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@workspace/ui/components/collapsible';
 import { Separator } from '@workspace/ui/components/separator';
 import { cn } from '@workspace/ui/lib/utils';
 import type { OrganizationRole } from '@workspace/db';
-import { updateOrganizationRole } from '@/server/organizations';
+import { updateOrganizationRole, deleteOrganizationRole } from '@/server/organizations';
 
 interface ManageRoleDialogProps {
     roles: OrganizationRole[];
@@ -67,6 +67,8 @@ export function ManageRoleDialog({ roles }: ManageRoleDialogProps) {
     const [open, setOpen] = useState(false);
     const [selectedRoleId, setSelectedRoleId] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [applicationSelectOpen, setApplicationSelectOpen] = useState(false);
 
     const form = useForm<FormValues>({
@@ -199,9 +201,44 @@ export function ManageRoleDialog({ roles }: ManageRoleDialogProps) {
         }
     }
 
+    async function handleDeleteRole() {
+        const activeOrg = session?.session?.activeOrganizationId;
+
+        if (!activeOrg) {
+            toast.error('No active organization found');
+            return;
+        }
+
+        if (!selectedRoleId) {
+            toast.error('Please select a role to delete');
+            return;
+        }
+
+        try {
+            setIsDeleting(true);
+
+            // Delete role using server action
+            await deleteOrganizationRole(selectedRoleId, activeOrg);
+
+            toast.success('Role deleted successfully');
+            setDeleteConfirmOpen(false);
+            setOpen(false);
+            setSelectedRoleId("");
+            window.location.reload();
+        } catch (error) {
+            console.error('Full error object:', error);
+            console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+            console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+
+            toast.error(error instanceof Error ? error.message : 'Failed to delete role');
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button className="mt-8 ml-4" />}>
+            <DialogTrigger render={<Button />}>
                 Manage Roles
             </DialogTrigger>
             <DialogContent className="md:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -425,21 +462,76 @@ export function ManageRoleDialog({ roles }: ManageRoleDialogProps) {
                                 <FieldError errors={[form.formState.errors.applicationPermissions.root]} />
                             )}
 
-                            {/* Submit Button */}
-                            <Button type="submit" disabled={isLoading} className="w-full">
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Updating...
-                                    </>
-                                ) : (
-                                    'Update Role'
-                                )}
-                            </Button>
+                            {/* Action Buttons */}
+                            <div className="flex gap-3">
+                                <Button type="submit" disabled={isLoading || isDeleting} className="flex-1">
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Updating...
+                                        </>
+                                    ) : (
+                                        'Update Role'
+                                    )}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    disabled={isLoading || isDeleting}
+                                    onClick={() => setDeleteConfirmOpen(true)}
+                                    className="flex-1"
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Role
+                                </Button>
+                            </div>
                         </form>
                     )}
                 </div>
             </DialogContent>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete Role</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete the role "{selectedRole?.role}"? This action cannot be undone.
+                            {selectedRole && (
+                                <span className="block mt-2 text-sm text-muted-foreground">
+                                    Note: This role cannot be deleted if it is currently assigned to any members.
+                                </span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-3 justify-end mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirmOpen(false)}
+                            disabled={isDeleting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteRole}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </Dialog>
     );
 }
