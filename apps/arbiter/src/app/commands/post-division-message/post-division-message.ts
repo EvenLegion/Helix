@@ -27,7 +27,7 @@ const COMBAT_DESCRIPTIONS: Record<string, string[]> = {
 		"\nIn this Division, you might: clear bunkers, operate tanks or transports, hold fortified positions, and assault, clear, and hold key locations.",
 	],
 	HVK: [
-		"**Heavy Air Support & Variable Ordinance** - H.A.V.O.K. is our multi-crew gunship and heavy-class strike unit. Operating between air and ground, they bring firepower and flexibility to escort, overwatch, and support combat teams in hostile zones.",
+		"**Heavy Air Support & Variable Ordnance** - H.A.V.O.K. is our multi-crew gunship and heavy-class strike unit. Operating between air and ground, they bring firepower and flexibility to escort, overwatch, and support combat teams in hostile zones.",
 		"\nIn this Division, you might: crew a gunship, escort dropships, take out enemy capital ships, or support divisions on the ground and in the air.",
 	],
 	RFT: [
