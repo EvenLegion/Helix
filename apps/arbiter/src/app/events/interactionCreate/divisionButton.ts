@@ -61,8 +61,10 @@ export default async function (interaction: ButtonInteraction, client: Client) {
 			{ err: error, userId: interaction.user.id, divisionKind, divisionCode },
 			"Error processing division button"
 		);
+		const errorMessage =
+			error instanceof Error ? error.message : String(error ?? "Unknown error");
 		await interaction.editReply({
-			content: `❌ Failed to update your division: ${error.message}`,
+			content: `❌ Failed to update your division: ${errorMessage}`,
 		});
 	}
 }
