@@ -105,7 +105,7 @@ export const menuItems = {
                 // This ensures we're checking admin roles, not organization permissions
                 try {
                     const result = await authClient.admin.hasPermission({
-                        permissions: { user: ['list'] }
+                        permissions: { user: ['ban'],  }
                     });
 
                     if ('error' in result && result.error) {

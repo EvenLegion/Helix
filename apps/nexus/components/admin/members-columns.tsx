@@ -3,8 +3,15 @@
 import { ColumnDef } from '@tanstack/react-table';
 import type { OrganizationRole } from '@workspace/db';
 import { Badge } from '@workspace/ui/components/badge';
-import { ArrowUpRight, UserCog, ArrowUpDown, Trash2, Loader2, Users } from 'lucide-react';
+import { ArrowUpRight, UserCog, ArrowUpDown, Trash2, Loader2, Users, MoreHorizontal } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@workspace/ui/components/dropdown-menu';
 import {
     Dialog,
     DialogContent,
@@ -313,6 +320,99 @@ function ImpersonateMemberButton({ member, canImpersonate }: { member: Member; c
     );
 }
 
+function MemberActionsDropdown({
+    member,
+    permissions
+}: {
+    member: Member;
+    permissions: { canDelete: boolean; canImpersonate: boolean };
+}) {
+    const [isLoading, setIsLoading] = useState<string | null>(null);
+    const router = useRouter();
+
+    const handleDelete = async () => {
+        setIsLoading('delete');
+        try {
+            await deleteMemberFromOrganization(member.id);
+            toast.success('Member deleted successfully');
+            router.refresh();
+        } catch (error) {
+            console.error('Failed to delete member:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to delete member');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const handleImpersonate = async () => {
+        setIsLoading('impersonate');
+        try {
+            const result = await authClient.admin.impersonateUser({
+                userId: member.userId,
+            });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || 'Failed to impersonate user');
+                return;
+            }
+
+            toast.success(`Now impersonating ${member.username || member.userId}`);
+            router.refresh();
+            window.location.reload();
+        } catch (error) {
+            console.error('Failed to impersonate user:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to impersonate user');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const hasAnyPermission = permissions.canDelete || permissions.canImpersonate;
+
+    if (!hasAnyPermission) {
+        return null;
+    }
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {permissions.canImpersonate && (
+                    <DropdownMenuItem onClick={handleImpersonate} disabled={isLoading !== null}>
+                        {isLoading === 'impersonate' ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Users className="mr-2 h-4 w-4" />
+                        )}
+                        <span>Impersonate Member</span>
+                    </DropdownMenuItem>
+                )}
+
+                {permissions.canDelete && (
+                    <>
+                        {permissions.canImpersonate && <DropdownMenuSeparator />}
+                        <DropdownMenuItem
+                            onClick={handleDelete}
+                            disabled={isLoading !== null}
+                            className="text-destructive focus:text-destructive"
+                        >
+                            {isLoading === 'delete' ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Trash2 className="mr-2 h-4 w-4" />
+                            )}
+                            <span>Remove Member</span>
+                        </DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
 export function getMembersColumns(
     roles: OrganizationRole[],
     permissions: { canUpdateRoles: boolean; canDelete: boolean; canImpersonate: boolean }
@@ -392,19 +492,17 @@ export function getMembersColumns(
             cell: ({ row }) => new Date(row.getValue('joinedAt')).toLocaleDateString(),
         },
         {
-            accessorKey: 'actions',
-            header: ({ column }) => {
-                return (
-                    <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-                        Actions
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                );
-            },
-            cell: ({ row }) => <div className="flex flex-wrap gap-1">
-                <DeleteMemberButton member={row.original} canDelete={permissions.canDelete} />
-                <ImpersonateMemberButton member={row.original} canImpersonate={permissions.canImpersonate} />
-            </div>
+            id: 'actions',
+            header: 'Actions',
+            cell: ({ row }) => (
+                <MemberActionsDropdown
+                    member={row.original}
+                    permissions={{
+                        canDelete: permissions.canDelete,
+                        canImpersonate: permissions.canImpersonate
+                    }}
+                />
+            ),
         }
     ];
 }

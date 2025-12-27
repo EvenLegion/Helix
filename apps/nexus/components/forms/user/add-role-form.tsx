@@ -16,7 +16,9 @@ import { Checkbox } from '@workspace/ui/components/checkbox';
 import type { OrganizationRole } from '@workspace/db';
 import type { Member } from '@/components/admin/members-columns';
 import { authClient } from '@/lib/auth-client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { updateSelfMemberRole } from '@/server/organizations';
+import { toast } from 'sonner';
 
 interface AddRoleFormProps {
     roles: OrganizationRole[];
@@ -32,6 +34,16 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
         return [];
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [isSelfUpdate, setIsSelfUpdate] = useState(false);
+
+    // Detect if this is a self-update
+    useEffect(() => {
+        async function checkSelf() {
+            const { data: session } = await authClient.getSession();
+            setIsSelfUpdate(session?.user.id === member.userId);
+        }
+        checkSelf();
+    }, [member.userId]);
 
     const toggleRole = (roleName: string) => {
         setSelectedRoles((prev) =>
@@ -47,25 +59,49 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
             // Get active organization from session
             const { data: session } = await authClient.getSession();
 
-            const memberId = member.id;
-
             if (!session?.session.activeOrganizationId) {
                 throw new Error('No active organization found in session');
             }
 
-            if (!memberId) {
-                throw new Error('No member ID provided');
-            }
+            // Filter to only include roles that exist in the organization
+            // Note: "owner" is a special built-in role that doesn't exist in the database
+            const validRoles = selectedRoles.filter((roleName) =>
+                roleName === 'owner' || roles.some((role) => role.role === roleName)
+            );
 
-            await authClient.organization.updateMemberRole({
-                role: selectedRoles,
-                memberId: memberId,
-                organizationId: session.session.activeOrganizationId,
-            });
+            // Use different endpoint based on whether this is a self-update
+            if (isSelfUpdate) {
+                // Use new server action for self-assignment
+                await updateSelfMemberRole(
+                    session.session.activeOrganizationId,
+                    validRoles
+                );
+            } else {
+                // Use existing better-auth API for updating other users
+                await authClient.organization.updateMemberRole({
+                    role: validRoles,
+                    memberId: member.id,
+                    organizationId: session.session.activeOrganizationId,
+                });
+            }
 
             window.location.reload();
         } catch (error) {
             console.error('Failed to update roles:', error);
+
+            // Provide helpful error messages
+            let errorMessage = 'Failed to update roles';
+            if (error instanceof Error) {
+                if (error.message.includes('owner role')) {
+                    errorMessage = 'You cannot remove the owner role from yourself.';
+                } else if (error.message.includes('does not exist')) {
+                    errorMessage = 'One or more selected roles are invalid.';
+                } else {
+                    errorMessage = error.message;
+                }
+            }
+
+            toast.error(errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -75,7 +111,11 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
         <form onSubmit={onSubmit}>
             <FieldSet>
                 <FieldLegend>Manage Roles</FieldLegend>
-                <FieldDescription>Select roles to assign to this user</FieldDescription>
+                <FieldDescription>
+                    {isSelfUpdate
+                        ? "You are updating your own roles. The 'owner' role cannot be removed."
+                        : 'Select roles to assign to this user'}
+                </FieldDescription>
                 <FieldGroup>
                     <Field>
                         <FieldLabel>Roles</FieldLabel>
@@ -85,23 +125,33 @@ export function AddRoleForm({ roles, member }: AddRoleFormProps) {
                                     No roles available
                                 </div>
                             ) : (
-                                roles.map((role) => (
-                                    <div
-                                        key={role.id}
-                                        className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm"
-                                    >
-                                        <Checkbox
-                                            checked={selectedRoles.includes(role.role)}
-                                            onCheckedChange={() => toggleRole(role.role)}
-                                        />
-                                        <span
-                                            className="flex-1 select-none capitalize cursor-pointer"
-                                            onClick={() => toggleRole(role.role)}
+                                roles.map((role) => {
+                                    const isOwnerRole = role.role === 'owner';
+                                    const isDisabled = isSelfUpdate && isOwnerRole;
+
+                                    return (
+                                        <div
+                                            key={role.id}
+                                            className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm"
                                         >
-                                            {role.role}
-                                        </span>
-                                    </div>
-                                ))
+                                            <Checkbox
+                                                checked={selectedRoles.includes(role.role)}
+                                                onCheckedChange={() => toggleRole(role.role)}
+                                                disabled={isDisabled}
+                                            />
+                                            <span
+                                                className={`flex-1 select-none capitalize ${
+                                                    isDisabled
+                                                        ? 'cursor-not-allowed opacity-50'
+                                                        : 'cursor-pointer'
+                                                }`}
+                                                onClick={() => !isDisabled && toggleRole(role.role)}
+                                            >
+                                                {role.role}
+                                            </span>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                         <FieldDescription>Select one or more roles to assign to the user</FieldDescription>

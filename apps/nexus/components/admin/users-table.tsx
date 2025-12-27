@@ -2,13 +2,20 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@workspace/ui/components/badge';
-import { ArrowUpDown, Shield, ShieldCheck, Users as UsersIcon, Ban, CheckCircle2, UserCheck } from 'lucide-react';
+import { ArrowUpDown, Shield, ShieldCheck, Users as UsersIcon, Ban, CheckCircle2, UserCheck, MoreHorizontal } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import { authClient } from '@/lib/auth-client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@workspace/ui/components/dropdown-menu';
 import {
     Table,
     TableBody,
@@ -296,6 +303,185 @@ function BanUserButton({ user, canBan }: { user: User; canBan: boolean }) {
     );
 }
 
+function ActionsDropdown({
+    user,
+    permissions
+}: {
+    user: User;
+    permissions: { canManageAdmin: boolean; canImpersonate: boolean; canBan: boolean };
+}) {
+    const [isLoading, setIsLoading] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(user.role === 'admin');
+    const [isModerator, setIsModerator] = useState(user.role === 'moderator');
+    const [isBanned, setIsBanned] = useState(user.banned ?? false);
+    const router = useRouter();
+
+    useEffect(() => {
+        setIsAdmin(user.role === 'admin');
+        setIsModerator(user.role === 'moderator');
+        setIsBanned(user.banned ?? false);
+    }, [user.role, user.banned]);
+
+    const handleToggleBan = async () => {
+        setIsLoading('ban');
+        try {
+            const result = isBanned
+                ? await authClient.admin.unbanUser({ userId: user.id })
+                : await authClient.admin.banUser({ userId: user.id, banReason: 'Banned by administrator' });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || `Failed to ${isBanned ? 'unban' : 'ban'} user`);
+                return;
+            }
+
+            setIsBanned(!isBanned);
+            toast.success(`${user.username || user.nickname || user.id} has been ${isBanned ? 'unbanned' : 'banned'}`);
+            router.refresh();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to toggle ban status');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const handleToggleModerator = async () => {
+        if (user.role === 'admin') {
+            toast.error('Cannot change admin role to moderator. Remove admin status first.');
+            return;
+        }
+
+        setIsLoading('moderator');
+        try {
+            const newRole = isModerator ? 'user' : 'moderator';
+            const result = await authClient.admin.setRole({ userId: user.id, role: newRole as any });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || `Failed to ${isModerator ? 'remove' : 'set'} moderator status`);
+                return;
+            }
+
+            setIsModerator(!isModerator);
+            toast.success(`${user.username || user.nickname || user.id} is now ${newRole === 'moderator' ? 'a moderator' : 'a regular user'}`);
+            router.refresh();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to toggle moderator status');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const handleToggleAdmin = async () => {
+        setIsLoading('admin');
+        try {
+            const newRole = isAdmin ? 'user' : 'admin';
+            const result = await authClient.admin.setRole({ userId: user.id, role: newRole });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || `Failed to ${isAdmin ? 'remove' : 'set'} admin status`);
+                return;
+            }
+
+            setIsAdmin(!isAdmin);
+            toast.success(`${user.username || user.nickname || user.id} is now ${newRole === 'admin' ? 'a super admin' : 'a regular user'}`);
+            router.refresh();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to toggle admin status');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const handleImpersonate = async () => {
+        setIsLoading('impersonate');
+        try {
+            const result = await authClient.admin.impersonateUser({ userId: user.id });
+
+            if ('error' in result && result.error) {
+                toast.error(result.error.message || 'Failed to impersonate user');
+                return;
+            }
+
+            toast.success(`Now impersonating ${user.username || user.nickname || user.id}`);
+            router.refresh();
+            window.location.reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to impersonate user');
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const hasAnyPermission = permissions.canBan || permissions.canManageAdmin || permissions.canImpersonate;
+
+    if (!hasAnyPermission) {
+        return null;
+    }
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {permissions.canBan && (
+                    <DropdownMenuItem onClick={handleToggleBan} disabled={isLoading !== null}>
+                        {isLoading === 'ban' ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : isBanned ? (
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                        ) : (
+                            <Ban className="mr-2 h-4 w-4" />
+                        )}
+                        <span>{isBanned ? 'Unban User' : 'Ban User'}</span>
+                    </DropdownMenuItem>
+                )}
+
+                {permissions.canManageAdmin && (
+                    <>
+                        <DropdownMenuItem
+                            onClick={handleToggleModerator}
+                            disabled={isLoading !== null || user.role === 'admin'}
+                        >
+                            {isLoading === 'moderator' ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <UserCheck className="mr-2 h-4 w-4" />
+                            )}
+                            <span>{isModerator ? 'Remove Moderator' : 'Set as Moderator'}</span>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={handleToggleAdmin} disabled={isLoading !== null}>
+                            {isLoading === 'admin' ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : isAdmin ? (
+                                <ShieldCheck className="mr-2 h-4 w-4" />
+                            ) : (
+                                <Shield className="mr-2 h-4 w-4" />
+                            )}
+                            <span>{isAdmin ? 'Remove Admin' : 'Set as Admin'}</span>
+                        </DropdownMenuItem>
+                    </>
+                )}
+
+                {permissions.canImpersonate && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleImpersonate} disabled={isLoading !== null}>
+                            {isLoading === 'impersonate' ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <UsersIcon className="mr-2 h-4 w-4" />
+                            )}
+                            <span>Impersonate User</span>
+                        </DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
 function getUsersColumns(
     permissions: { canManageAdmin: boolean; canImpersonate: boolean; canBan: boolean }
 ): ColumnDef<User>[] {
@@ -401,12 +587,7 @@ function getUsersColumns(
             id: 'actions',
             header: 'Actions',
             cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1">
-                    <BanUserButton user={row.original} canBan={permissions.canBan} />
-                    <ModeratorRoleButton user={row.original} canManageAdmin={permissions.canManageAdmin} />
-                    <SuperAdminButton user={row.original} canManageAdmin={permissions.canManageAdmin} />
-                    <ImpersonateUserButton user={row.original} canImpersonate={permissions.canImpersonate} />
-                </div>
+                <ActionsDropdown user={row.original} permissions={permissions} />
             ),
         },
     ];
@@ -429,10 +610,18 @@ export function UsersTable({ users }: { users: User[] }) {
         const checkPermissions = async () => {
             setIsLoading(true);
             try {
-                // Check if current user is admin to allow managing admin status
+                // Get session and check user's role
                 const session = await authClient.getSession();
-                const isCurrentUserAdmin = session.data?.user?.role === 'admin';
+                const userRole = session.data?.user?.role;
 
+                // Users with User.role = 'admin' can manage roles (set admin/moderator)
+                const isCurrentUserAdmin = userRole === 'admin';
+
+                // Debug: Log session data
+                console.log('[UsersTable] Session user role:', userRole);
+                console.log('[UsersTable] Is admin:', isCurrentUserAdmin);
+
+                // Check admin plugin permissions
                 const [impersonateResult, banResult] = await Promise.all([
                     authClient.admin.hasPermission({
                         permissions: { user: ['impersonate'] }
@@ -442,19 +631,29 @@ export function UsersTable({ users }: { users: User[] }) {
                     }),
                 ]);
 
+                // Debug: Log permission results
+                console.log('[UsersTable] Impersonate result:', impersonateResult);
+                console.log('[UsersTable] Ban result:', banResult);
+
                 if (!isMounted) return;
 
                 const getSuccess = (result: typeof impersonateResult) => {
-                    if ('error' in result && result.error) return false;
+                    if ('error' in result && result.error) {
+                        console.log('[UsersTable] Permission error:', result.error);
+                        return false;
+                    }
                     if ('data' in result) return result.data.success ?? false;
                     return false;
                 };
 
-                setPermissions({
-                    canManageAdmin: isCurrentUserAdmin ?? false,
+                const permissions = {
+                    canManageAdmin: isCurrentUserAdmin,
                     canImpersonate: getSuccess(impersonateResult),
                     canBan: getSuccess(banResult),
-                });
+                };
+
+                console.log('[UsersTable] Final permissions:', permissions);
+                setPermissions(permissions);
             } catch (error) {
                 console.error('Error checking permissions:', error);
                 if (isMounted) {

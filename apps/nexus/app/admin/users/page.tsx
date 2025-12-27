@@ -1,16 +1,40 @@
 import { UserDAL } from '@/dal/users';
 import { Card, CardHeader, CardTitle, CardContent } from '@workspace/ui/components/card';
-import { checkPermissions } from '@/server/permissions';
 import { UsersTable } from '@/components/admin/users-table';
-import { authClient } from '@/lib/auth-client';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 export default async function Users() {
     // Check if user has permission to view all users
-    const canViewUsers = await authClient.admin.hasPermission({
-        permissions: { user: ['list'] }
+    const session = await auth.api.getSession({
+        headers: await headers()
     });
 
-    if (!canViewUsers) {
+    if (!session) {
+        return (
+            <div className="min-h-svh p-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Access Denied</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>You do not have permission to view this page.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    const canViewUsers = await auth.api.userHasPermission({
+        body: {
+            userId: session.user.id,
+            permissions: { user: ['list']}
+        },
+        headers: await headers()
+    });
+
+    // Check the success property of the response object
+    if (!canViewUsers?.success) {
         return (
             <div className="min-h-svh p-4">
                 <Card>

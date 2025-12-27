@@ -225,3 +225,66 @@ export async function deleteMemberFromOrganization(memberId: string) {
 
     return { success: true };
 }
+
+/**
+ * Allow owners to assign themselves additional roles
+ * Bypasses better-auth's self-modification restriction
+ * SECURITY: Only owners can use this, and owner role cannot be removed
+ */
+export async function updateSelfMemberRole(
+    organizationId: string,
+    roles: string[]
+) {
+    // 1. Get current user
+    const { currentUser } = await getCurrentUser();
+    if (!currentUser) {
+        throw new Error('Unauthorized');
+    }
+
+    // 2. Find the member record for the current user
+    const member = await MemberDAL.findByUserIdAndOrganizationId(
+        currentUser.id,
+        organizationId
+    );
+
+    if (!member) {
+        throw new Error('You are not a member of this organization');
+    }
+
+    // 3. CRITICAL VALIDATION: Check if user is currently an owner
+    const currentRoles = member.role.split(',').map(r => r.trim());
+    const isOwner = currentRoles.includes('owner');
+
+    if (!isOwner) {
+        throw new Error('Only owners can assign themselves roles');
+    }
+
+    // 4. CRITICAL VALIDATION: Ensure 'owner' role is preserved
+    if (!roles.includes('owner')) {
+        throw new Error('Cannot remove owner role from yourself');
+    }
+
+    // 5. Validate all requested roles exist in the organization
+    const validationPromises = roles
+        .filter(role => role !== 'owner') // owner is a special role
+        .map(async (role) => {
+            const orgRole = await RoleDAL.findByRoleNameAndOrganizationId(
+                role,
+                organizationId
+            );
+            if (!orgRole) {
+                throw new Error(`Role "${role}" does not exist in this organization`);
+            }
+        });
+
+    await Promise.all(validationPromises);
+
+    // 6. Update the member record directly via Prisma (bypass better-auth)
+    const updatedMember = await MemberDAL.updateRoles(
+        member.id,
+        roles.join(', ')
+    );
+
+    return updatedMember;
+}
+

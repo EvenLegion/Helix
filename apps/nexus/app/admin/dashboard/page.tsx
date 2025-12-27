@@ -6,13 +6,27 @@ import {
     CardContent
 } from '@workspace/ui/components/card'
 
-import { isAdmin } from '@/server/permissions'
+import {checkPermissions, isAdmin} from '@/server/permissions'
 
 export default async function Dashboard() {
-    const admin = await isAdmin();
+    // Check if user has permission to access this page
+    const hasPermission = await checkPermissions({
+        admin: ['admin_dashboard']
+    });
 
-    if (!admin) {
-        throw new Error("You do not have permission to access this page.");
+    if (!hasPermission) {
+        return (
+            <div className="min-h-svh p-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Access Denied</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>You do not have permission to access this page.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
     }
 
     const { currentUser } = await getCurrentUser();

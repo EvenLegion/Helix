@@ -3,7 +3,7 @@ import { organization, admin } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
-import { ac, owner, adminRole, moderator } from "@/lib/auth/permissions";
+import { ac, owner, adminRole, moderator, user } from "@/lib/auth/permissions";
 import { getActiveOrganization } from "@/server/organizations";
 
 interface Account {
@@ -44,6 +44,7 @@ export const auth = betterAuth({
             roles: {
                 admin: adminRole,
                 moderator,
+                user
             },
             adminRoles: ['admin'], // Users with role='admin' can use all admin features
         }),

@@ -110,4 +110,19 @@ export class MemberDAL {
             },
         });
     }
+
+    /**
+     * Update a member's roles directly (bypasses better-auth)
+     * Used for owner self-assignment only
+     */
+    static async updateRoles(memberId: string, roles: string) {
+        return prisma.member.update({
+            where: { id: memberId },
+            data: { role: roles },
+            include: {
+                user: true,
+                organization: true,
+            },
+        });
+    }
 }

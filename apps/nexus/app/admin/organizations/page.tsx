@@ -12,13 +12,36 @@ import { RoleDAL } from '@/dal/roles';
 import { checkPermissions } from '@/server/permissions';
 
 export default async function Organizations() {
+    // Check if user has permission to view organizations
+    const canViewOrganizations = await checkPermissions({
+        member: ['read']
+    });
+
+    if (!canViewOrganizations) {
+        return (
+            <div className="min-h-svh p-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Access Denied</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>You do not have permission to view this page.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     const userOrgs = await getOrganizations();
     const organizations = userOrgs?.Member?.map((member) => member.organization) || [];
 
     // Fetch all members for these organizations
-    const members = await MemberDAL.findByOrganizationIds(
+    const allMembers = await MemberDAL.findByOrganizationIds(
         organizations.map((org) => org.id)
     );
+
+    // Filter out orphaned members (where user doesn't exist)
+    const members = allMembers.filter((member) => member.user !== null);
 
     const roles = await RoleDAL.findByOrganizationIds(
         organizations.map((org) => org.id)

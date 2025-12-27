@@ -28,6 +28,10 @@ export function MembersTable({
         const checkPermissions = async () => {
             setIsLoading(true);
             try {
+                // Debug: Check active organization
+                const activeOrg = await authClient.organization.getActiveMember();
+                console.log('[MembersTable] Active member:', activeOrg);
+
                 const [updateResult, deleteResult, impersonateResult] = await Promise.all([
                     authClient.organization.hasPermission({
                         permissions: { member: ['update'] }
@@ -40,19 +44,29 @@ export function MembersTable({
                     }),
                 ]);
 
+                // Debug: Log results
+                console.log('[MembersTable] Update permission result:', updateResult);
+                console.log('[MembersTable] Delete permission result:', deleteResult);
+                console.log('[MembersTable] Impersonate permission result:', impersonateResult);
+
                 if (!isMounted) return;
 
                 const getSuccess = (result: typeof updateResult) => {
-                    if ('error' in result && result.error) return false;
+                    if ('error' in result && result.error) {
+                        console.log('[MembersTable] Permission error:', result.error);
+                        return false;
+                    }
                     if ('data' in result) return result.data.success ?? false;
                     return false;
                 };
 
-                setPermissions({
+                const perms = {
                     canUpdateRoles: getSuccess(updateResult),
                     canDelete: getSuccess(deleteResult),
                     canImpersonate: getSuccess(impersonateResult),
-                });
+                };
+                console.log('[MembersTable] Final permissions:', perms);
+                setPermissions(perms);
             } catch (error) {
                 console.error('Error checking permissions:', error);
                 if (isMounted) {
