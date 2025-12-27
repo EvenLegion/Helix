@@ -112,10 +112,16 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 		return interaction.editReply({
 			content: `${divisionType === "combat" ? "Combat" : "Industrial"} division message posted successfully!`,
 		});
-	} catch (error: any) {
+	} catch (error: unknown) {
 		log.error({ err: error }, "Failed to post division message");
+		const errorMessage =
+			error instanceof Error
+				? error.message
+				: typeof error === "string"
+					? error
+					: "An unknown error occurred";
 		return interaction.editReply({
-			content: `Failed to post message: ${error.message}`,
+			content: `Failed to post message: ${errorMessage}`,
 		});
 	}
 }
