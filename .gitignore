@@ -48,3 +48,5 @@ TODO.txt
 /apps/nexus/.claude/settings.local.json
 /apps/nexus/nul
 /.claude/
+.claude/settings.local.json
+CLAUDE.md

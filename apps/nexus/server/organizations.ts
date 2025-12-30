@@ -6,6 +6,8 @@ import { OrganizationDAL } from "@/dal/organizations";
 import { MemberDAL } from "@/dal/members";
 import { RoleDAL } from "@/dal/roles";
 import { UserDAL } from "@/dal/users";
+import { checkPermissions } from "./permissions";
+import { logSuccess, logDenied } from "./audit";
 
 export async function getOrganizations() {
     const { currentUser } = await getCurrentUser();
@@ -14,17 +16,75 @@ export async function getOrganizations() {
 }
 
 export async function getAllOrganizations() {
-    return OrganizationDAL.findAll();
+    const { currentUser } = await getCurrentUser();
+
+    // TODO: Modify Permissions
+    const hasPermission = await checkPermissions({ admin: ['admin_dashboard']});
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'orginazation.list_all',
+            resource: 'organization',
+            errorMessage: 'User lacks permission to list all organizations',
+        });
+        throw new Error('Unauthorized: Insufficient permissions');
+    }
+
+    const organizations = await OrganizationDAL.findAll();
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'organization.list_all',
+        resource: 'organization',
+        metadata: { count: organizations.length },
+    });
+
+    return organizations;
 }
 
 export async function getActiveOrganization(userId: string) {
+    const { currentUser } = await getCurrentUser();
+
+    const isSelf = currentUser?.id === userId;
+    // TODO: Modify Permissions
+    const isAdmin = !isSelf && await checkPermissions({ admin: ['admin_dashboard']});
+
+    if (!isSelf && !isAdmin) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'organization.get_active',
+            resource: 'organization',
+            errorMessage: 'Cannot query other users',
+            metadata: { requestedUserId: userId },
+        });
+        throw new Error('Unauthorized: You can only query your own active organization');
+    }
+
     const memberUser = await MemberDAL.findByUserId(userId);
 
     if (!memberUser) {
+        await logSuccess({
+            userId: currentUser?.id,
+            action: 'organization.get_active',
+            resource: 'organization',
+            metadata: { requestedUserId: userId, found: false },
+        });
         return null;
     }
 
-    return OrganizationDAL.findById(memberUser.organizationId);
+    const organization = await OrganizationDAL.findById(memberUser.organizationId);
+
+    await logSuccess({
+        userId: currentUser?.id,
+        action: 'organization.get_active',
+        resource: 'organization',
+        resourceId: organization?.id,
+        organizationId: organization?.id,
+        metadata: { requestedUserId: userId},
+    });
+
+    return organization;
 }
 
 export async function updateOrganizationRole(
@@ -35,6 +95,13 @@ export async function updateOrganizationRole(
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'role.update',
+            resource: 'role',
+            resourceId: roleId,
+            organizationId,
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
@@ -42,17 +109,69 @@ export async function updateOrganizationRole(
     const existingRole = await RoleDAL.findByIdAndOrganizationId(roleId, organizationId);
 
     if (!existingRole) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'role.update',
+            resource: 'role',
+            resourceId: roleId,
+            organizationId,
+            errorMessage: 'Role not found',
+        });
         throw new Error('Role not found or does not belong to this organization');
     }
 
+    //Check permissions
+    const hasPermission = await checkPermissions({ ac: ['update']});
+    if (!hasPermission) {
+        const member = await MemberDAL.findByUserIdAndOrganizationId(
+            currentUser.id,
+            organizationId
+        );
+
+        const isOwner = member?.role.split(',').map(r => r.trim()).includes('owner');
+
+        if (!isOwner) {
+            await logDenied({
+                userId: currentUser.id,
+                action: 'role.update',
+                resource: 'role',
+                resourceId: roleId,
+                organizationId,
+                errorMessage: 'Insufficient permissions to update role',
+                metadata: { userRole: member?.role },
+            });
+            throw new Error('Unauthorized: Insufficient permissions to update role');
+        }
+    }
+
     // Update the role with new permissions
-    return RoleDAL.updatePermissions(roleId, permission);
+    const updatedRole = await RoleDAL.updatePermissions(roleId, permission);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'role.update',
+        resource: 'role',
+        resourceId: roleId,
+        organizationId,
+        changes: {
+            before: JSON.parse(existingRole.permission),
+            after: permission,
+        },
+        metadata: { updatedPermissions: permission },
+    });
 }
 
 export async function deleteOrganization(organizationId: string) {
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'organization.delete',
+            resource: 'organization',
+            resourceId: organizationId,
+            organizationId,
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
@@ -63,11 +182,45 @@ export async function deleteOrganization(organizationId: string) {
     );
 
     if (!member) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'organization.delete',
+            resource: 'organization',
+            resourceId: organizationId,
+            organizationId,
+            errorMessage: 'Not a member',
+        });
         throw new Error('You are not a member of this organization');
     }
 
-    // Delete the organization (cascade will handle members, invitations, and roles)
+    // CHECK: Only owners can delete the organization
+    const memberRoles = member.role.split(',').map(r => r.trim());
+    const isOwner = memberRoles.includes('owner');
+
+    if (!isOwner) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'organization.delete',
+            resource: 'organization',
+            resourceId: organizationId,
+            organizationId,
+            errorMessage: 'Only owners can delete the organization',
+            metadata: { userRole: member.role },
+        });
+        throw new Error('Unauthorized: Only owners can delete the organization');
+    }
+
+    const org = await OrganizationDAL.findById(organizationId);
     await OrganizationDAL.delete(organizationId);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'organization.delete',
+        resource: 'organization',
+        resourceId: organizationId,
+        organizationId,
+        metadata: { organizationName: org?.name },
+    });
 
     return { success: true };
 }
@@ -79,36 +232,94 @@ export async function deleteOrganizationRole(
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'role.delete',
+            resource: 'role',
+            resourceId: roleId,
+            organizationId,
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
-    // Verify the role belongs to the organization
     const existingRole = await RoleDAL.findByIdAndOrganizationId(roleId, organizationId);
 
     if (!existingRole) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'role.delete',
+            resource: 'role',
+            resourceId: roleId,
+            organizationId,
+            errorMessage: 'Role not found',
+        });
         throw new Error('Role not found or does not belong to this organization');
     }
 
-    // Check if any members are using this role
+    //Check permissions ac:delete or owner
+    const hasPermission = await checkPermissions({ ac: ['delete']});
+
+    if (!hasPermission) {
+        const member = await MemberDAL.findByUserIdAndOrganizationId(
+            currentUser.id,
+            organizationId
+        );
+
+        const isOwner = member?.role.split(',').map(r => r.trim()).includes('owner');
+
+        if (!isOwner) {
+            await logDenied({
+                userId: currentUser.id,
+                action: 'role.delete',
+                resource: 'role',
+                resourceId: roleId,
+                organizationId,
+                errorMessage: 'Lacks ac:delete permission or owner role',
+                metadata: { userRole: member?.role },
+            });
+            throw new Error('Unauthorized: Insufficient permissions to delete role');
+        }
+    }
+
+    // Check if any members use this role
     const membersUsingRole = await MemberDAL.findByOrganizationIdWithRole(
         organizationId,
         existingRole.role
     );
 
-    // Filter to only members that actually have this role (since role is comma-separated)
     const membersWithRole = membersUsingRole.filter(member => {
         const memberRoles = member.role.split(',').map(r => r.trim());
         return memberRoles.includes(existingRole.role);
     });
 
     if (membersWithRole.length > 0) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'role.delete',
+            resource: 'role',
+            resourceId: roleId,
+            organizationId,
+            errorMessage: `Role is assigned to ${membersWithRole.length} members`,
+            metadata: {
+                roleName: existingRole.role,
+                memberCount: membersWithRole.length,
+            }
+        });
         throw new Error(
-            `Cannot delete role "${existingRole.role}" because it is assigned to ${membersWithRole.length} member(s). Please remove the role from all members first.`
+            `Cannot delete role "${existingRole.role}" as it is assigned to ${membersWithRole.length} members`
         );
     }
 
-    // Delete the role
     await RoleDAL.delete(roleId);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'role.delete',
+        resource: 'role',
+        resourceId: roleId,
+        organizationId,
+        metadata: { roleName: existingRole.role },
+    });
 
     return { success: true };
 }
@@ -120,10 +331,37 @@ export async function searchUsers(query: string) {
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'user.search',
+            resource: 'user',
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
-    return UserDAL.search(query);
+    // TODO: Modify Permissions
+    const hasPermission = await checkPermissions({ admin: ['admin_dashboard'] });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'user.search',
+            resource: 'user',
+            errorMessage: 'Lacks admin permissions',
+        });
+        throw new Error('Unauthorized: Insufficient permissions to search users');
+    }
+
+    const results = await UserDAL.search(query);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'user.search',
+        resource: 'user',
+        metadata: { query, resultCount: results.length },
+    });
+
+    return results;
 }
 
 /**
@@ -137,50 +375,109 @@ export async function addUserToOrganization(
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'member.create',
+            resource: 'member',
+            organizationId,
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
-    // Verify current user is a member of the organization
     const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
         currentUser.id,
         organizationId
     );
 
     if (!currentUserMember) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.create',
+            resource: 'member',
+            organizationId,
+            errorMessage: 'Not a member of the organization',
+        });
         throw new Error('You are not a member of this organization');
     }
 
-    // Check if user exists
+    // Check permissions: member create
+    const hasPermission = await checkPermissions({ member: ['create'] });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.create',
+            resource: 'member',
+            organizationId,
+            errorMessage: 'Insufficient permissions to add members: member.create',
+        });
+        throw new Error('Unauthorized: Insufficient permissions to add members');
+    }
+
     const user = await UserDAL.findById(userId);
 
     if (!user) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.create',
+            resource: 'member',
+            organizationId,
+            errorMessage: 'User to add not found',
+            metadata: { userIdToAdd: userId },
+        });
         throw new Error('User not found');
     }
 
-    // Check if user is already a member of this organization
     const existingMember = await MemberDAL.findByUserIdAndOrganizationId(
         userId,
         organizationId
     );
 
     if (existingMember) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.create',
+            resource: 'member',
+            organizationId,
+            errorMessage: 'User is already a member of the organization',
+            metadata: { userIdToAdd: userId },
+        });
         throw new Error('User is already a member of this organization');
     }
 
-    // Verify the role exists for this organization (if it's not "owner")
     if (role !== 'owner') {
         const orgRole = await RoleDAL.findByRoleNameAndOrganizationId(role, organizationId);
 
         if (!orgRole) {
+            await logDenied({
+                userId: currentUser.id,
+                action: 'member.create',
+                resource: 'member',
+                organizationId,
+                errorMessage: `Role "${role}" does not exist in organization`,
+                metadata: { targetUserId: userId, requestedRole: role },
+            });
             throw new Error(`Role "${role}" does not exist in this organization`);
         }
     }
 
-    // Create the member
     const member = await MemberDAL.create({
         userId,
         organizationId,
         role,
+    });
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'member.create',
+        resource: 'member',
+        resourceId: member.id,
+        organizationId,
+        metadata: {
+            targetUserId: userId,
+            targetUserEmail: user.email,
+            assignedRole: role,
+        },
     });
 
     return member;
@@ -190,38 +487,100 @@ export async function deleteMemberFromOrganization(memberId: string) {
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
+        await logDenied({
+            action: 'member.delete',
+            resource: 'member',
+            errorMessage: 'Unauthenticated',
+        });
         throw new Error('Unauthorized');
     }
 
-    // Find the member to be removed
     const memberToRemove = await MemberDAL.findById(memberId);
 
     if (!memberToRemove) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.delete',
+            resource: 'member',
+            resourceId: memberId,
+            errorMessage: 'Member not found',
+        });
         throw new Error('Member not found');
     }
 
-    // Verify the member belongs to the organization
+    const organizationId = memberToRemove.organizationId;
+
     const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
         currentUser.id,
-        memberToRemove.organizationId
+        organizationId
     );
 
     if (!currentUserMember) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.delete',
+            resource: 'member',
+            resourceId: memberId,
+            organizationId,
+            errorMessage: 'Not a member',
+        });
         throw new Error('You are not a member of this organization');
     }
 
-    // Prevent users from removing themselves
+    // Check permission: member:delete
+    const hasPermission = await checkPermissions({ member: ['delete'] });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.delete',
+            resource: 'member',
+            resourceId: memberId,
+            organizationId,
+            errorMessage: 'Lacks member:delete',
+            metadata: { userRole: currentUserMember.role },
+        });
+        throw new Error('Unauthorized: You do not have permission to remove members');
+    }
+
     if (currentUserMember.userId === memberToRemove.userId) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.delete',
+            resource: 'member',
+            resourceId: memberId,
+            organizationId,
+            errorMessage: 'Cannot remove self',
+        });
         throw new Error('You cannot remove yourself from the organization');
     }
 
-    // Prevent from removing the owner
     if (memberToRemove.role === 'owner') {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'member.delete',
+            resource: 'member',
+            resourceId: memberId,
+            organizationId,
+            errorMessage: 'Cannot remove owner',
+            metadata: { targetUserId: memberToRemove.userId },
+        });
         throw new Error('You cannot remove the owner from the organization');
     }
 
-    // Delete the member
     await MemberDAL.delete(memberId);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'member.delete',
+        resource: 'member',
+        resourceId: memberId,
+        organizationId,
+        metadata: {
+            removedUserId: memberToRemove.userId,
+            removedUserRole: memberToRemove.role,
+        },
+    });
 
     return { success: true };
 }
