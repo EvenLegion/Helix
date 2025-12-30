@@ -44,4 +44,17 @@ export class AuditLogDAL {
             },
         });
     }
+
+    static async findFailedAttemps(limit: number = 100) {
+        return prisma.auditLog.findMany({
+            where: { status: { in: ['denied', 'error'] } },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            include: {
+                user: {
+                    select: {id: true, email: true, username: true }
+                }
+            }
+        });
+    }
 }

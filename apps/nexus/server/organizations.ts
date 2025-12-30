@@ -24,7 +24,7 @@ export async function getAllOrganizations() {
     if (!hasPermission) {
         await logDenied({
             userId: currentUser.id,
-            action: 'orginazation.list_all',
+            action: 'organization.list_all',
             resource: 'organization',
             errorMessage: 'User lacks permission to list all organizations',
         });
@@ -159,6 +159,8 @@ export async function updateOrganizationRole(
         },
         metadata: { updatedPermissions: permission },
     });
+
+    return updatedRole;
 }
 
 export async function deleteOrganization(organizationId: string) {

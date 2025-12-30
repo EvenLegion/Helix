@@ -34,7 +34,39 @@ export async function createTestMember(
     });
 }
 
-// TODO: START HERE UPSTAIRS
 export async function createTestSetup(role: string = 'owner') {
     const user = await createTestUser();
+    const org = await createTestOrganization();
+    const member = await createTestMember(user.id, org.id, role);
+
+    return { user, org, member };
+}
+
+export async function cleanupTestData() {
+    // Delete audit logs first (before users are deleted due to foreign key)
+    // Only delete audit logs related to test users or test organizations
+    await prisma.auditLog.deleteMany({
+        where: {
+            OR: [
+                { userId: { startsWith: 'test-user-' } },
+                { organizationId: { startsWith: 'test-org-' } },
+            ],
+        },
+    });
+
+    await prisma.member.deleteMany({
+        where: { userId: { startsWith: 'test-user-' } },
+    });
+
+    await prisma.organizationRole.deleteMany({
+        where: { organizationId: { startsWith: 'test-org-' } },
+    });
+
+    await prisma.organization.deleteMany({
+        where: { id: { startsWith: 'test-org-' } },
+    });
+
+    await prisma.user.deleteMany({
+        where: { id: { startsWith: 'test-user-' } },
+    });
 }
