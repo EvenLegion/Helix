@@ -43,6 +43,21 @@ export async function getAllOrganizations() {
     return organizations;
 }
 
+/**
+ * Internal helper for auth hooks - does NOT check permissions
+ * Only use this from auth.ts database hooks
+ */
+export async function getActiveOrganizationInternal(userId: string) {
+    const memberUser = await MemberDAL.findByUserId(userId);
+
+    if (!memberUser) {
+        return null;
+    }
+
+    const organization = await OrganizationDAL.findById(memberUser.organizationId);
+    return organization;
+}
+
 export async function getActiveOrganization(userId: string) {
     const { currentUser } = await getCurrentUser();
 

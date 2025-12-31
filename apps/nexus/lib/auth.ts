@@ -4,7 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@workspace/db";
 import { ac, owner, adminRole, moderator, user } from "@/lib/auth/permissions";
-import { getActiveOrganization } from "@/server/organizations";
+import { getActiveOrganizationInternal } from "@/server/organizations";
 
 interface Account {
     id: string;
@@ -141,11 +141,11 @@ export const auth = betterAuth({
         session: {
             create: {
                 before: async (session) => {
-                    const organization = await getActiveOrganization(session.userId);
+                    const organization = await getActiveOrganizationInternal(session.userId);
                     return {
                         data: {
                             ...session,
-                            activeOrganizationId: organization?.id,
+                            activeOrganizationId: organization?.id ?? null,
                         }
                     }
                 }

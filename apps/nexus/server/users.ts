@@ -17,7 +17,7 @@ export const getCurrentUser = async () => {
         const signInResponse = await auth.api.signInSocial({
             body: {
                 provider: "discord",
-                callbackURL: "/admin"
+                callbackURL: "/dashboard"
             },
         });
 
@@ -33,7 +33,7 @@ export const getCurrentUser = async () => {
         const signInResponse = await auth.api.signInSocial({
             body: {
                 provider: "discord",
-                callbackURL: "/admin"
+                callbackURL: "/dashboard"
             },
         });
 
