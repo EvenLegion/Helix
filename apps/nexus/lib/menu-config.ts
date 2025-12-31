@@ -1,12 +1,13 @@
 import { House, UserStar, Shield, Building2, Users } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
-import { authClient } from '@/lib/auth-client';
 
 export interface MenuItemContext {
     hasActiveOrg: boolean;
     // Function to check if user has specific permissions
     // Returns a promise that resolves to true if user has the permissions
     hasPermission: (permissions: Record<string, string[]>) => Promise<boolean>;
+    // User's admin role (from better-auth admin plugin)
+    userRole?: string | null;
 }
 
 export interface MenuItem {
@@ -72,27 +73,62 @@ export const menuItems = {
             title: 'Dashboard',
             url: '/admin/dashboard',
             icon: UserStar,
-            requiresActiveOrg: true,
-            requiredPermissions: {
-                admin: ['admin_dashboard']
+            requiresActiveOrg: false,
+            condition: async (context: MenuItemContext) => {
+                // Check if user has admin role
+                try {
+                    // Only admins can see the admin dashboard
+                    if (context.userRole === 'admin') {
+                        return true;
+                    }
+
+                    return false;
+                } catch (error) {
+                    console.error('Error checking permissions for Dashboard menu:', error);
+                    return false;
+                }
             },
         },
         {
             title: 'Moderation',
             url: '/admin/moderation',
             icon: Shield,
-            requiresActiveOrg: true,
-            requiredPermissions: {
-                admin: ['admin_dashboard']
+            requiresActiveOrg: false,
+            condition: async (context: MenuItemContext) => {
+                // Check if user has admin role OR moderator role
+                try {
+                    // Admins and moderators can see the moderation page
+                    if (context.userRole === 'admin' || context.userRole === 'moderator') {
+                        return true;
+                    }
+
+                    return false;
+                } catch (error) {
+                    console.error('Error checking permissions for Moderation menu:', error);
+                    return false;
+                }
             },
         },
         {
             title: 'Organizations',
             url: '/admin/organizations',
             icon: Building2,
-            requiresActiveOrg: true,
-            requiredPermissions: {
-                member: ['read']
+            requiresActiveOrg: false,
+            condition: async (context: MenuItemContext) => {
+                // Check if user has admin role OR member:read permission (organization)
+                try {
+                    // First check if user has admin role
+                    if (context.userRole === 'admin') {
+                        return true;
+                    }
+
+                    // Otherwise, check organization permission
+                    const hasOrgPermission = await context.hasPermission({ member: ['read'] });
+                    return hasOrgPermission;
+                } catch (error) {
+                    console.error('Error checking permissions for Organizations menu:', error);
+                    return false;
+                }
             },
         },
         {
@@ -101,24 +137,16 @@ export const menuItems = {
             icon: Users,
             requiresActiveOrg: false,
             condition: async (context: MenuItemContext) => {
-                // Check admin plugin permissions for user:list
-                // This ensures we're checking admin roles, not organization permissions
+                // Check if user has admin role OR moderator role (both can access user management)
                 try {
-                    const result = await authClient.admin.hasPermission({
-                        permissions: { user: ['ban'],  }
-                    });
-
-                    if ('error' in result && result.error) {
-                        return false;
-                    }
-
-                    if ('data' in result) {
-                        return result.data.success ?? false;
+                    // Admins and moderators can see the Users page
+                    if (context.userRole === 'admin' || context.userRole === 'moderator') {
+                        return true;
                     }
 
                     return false;
                 } catch (error) {
-                    console.error('Error checking admin permission for Users menu:', error);
+                    console.error('Error checking permissions for Users menu:', error);
                     return false;
                 }
             },

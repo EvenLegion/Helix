@@ -62,6 +62,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 const context = {
                     hasActiveOrg,
                     hasPermission,
+                    userRole: session?.user?.role,
                 };
 
                 const [main, authenticated, admin] = await Promise.all([
