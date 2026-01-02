@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import * as React from 'react';
 import Image from 'next/image';
@@ -12,20 +12,20 @@ import {
     SidebarMenu,
     SidebarMenuItem,
     SidebarMenuButton,
-} from "@workspace/ui/components/sidebar";
-import { Skeleton } from "@workspace/ui/components/skeleton";
-import { NavGroup } from "@/components/navigation/nav-group";
-import { NavUser } from "@/components/navigation/nav-user";
-import { authClient } from "@/lib/auth-client";
-import { getMenuItemsByGroup } from "@/lib/menu-config";
-import { filterMenuItems } from "@/lib/utils/filter-menu-items";
-import { checkPermissions } from "@/server/permissions";
+} from '@workspace/ui/components/sidebar';
+import { Skeleton } from '@workspace/ui/components/skeleton';
+import { NavGroup } from '@/components/navigation/nav-group';
+import { NavUser } from '@/components/navigation/nav-user';
+import { authClient } from '@/lib/auth-client';
+import { getMenuItemsByGroup } from '@/lib/menu-config';
+import { filterMenuItems } from '@/lib/utils/filter-menu-items';
+import { checkPermissions } from '@/server/permissions';
 
 const data = {
     navMain: getMenuItemsByGroup('navMain'),
     navAdmin: getMenuItemsByGroup('navAdmin'),
     navAuthenticated: getMenuItemsByGroup('navAuthenticated'),
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { data: session, isPending } = authClient.useSession();
@@ -46,13 +46,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }, []);
 
     // Permission checking function using server action
-    const hasPermission = React.useCallback(async (permissions: Record<string, string[]>): Promise<boolean> => {
-        if (!session?.user) {
-            return false;
-        }
+    const hasPermission = React.useCallback(
+        async (permissions: Record<string, string[]>): Promise<boolean> => {
+            if (!session?.user) {
+                return false;
+            }
 
-        return checkPermissions(permissions);
-    }, [session?.user]);
+            return checkPermissions(permissions);
+        },
+        [session?.user],
+    );
 
     // Filter menu items based on conditions (including permissions)
     React.useEffect(() => {
@@ -92,7 +95,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const onSignIn = async () => {
         await authClient.signIn.social({
-            provider: "discord",
+            provider: 'discord',
         });
     };
 
@@ -102,10 +105,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton
-                            className="data-[slot=sidebar-menu-button]:!p-1.5 w-full"
+                            className="data-[slot=sidebar-menu-button]:p-1.5! w-full"
                             render={(props) => (
                                 <a {...props} href="#">
-                                    <Image src="/logo.svg" alt="Even Legion" width={24} height={24} className="!size-6" />
+                                    <Image
+                                        src="/logo.svg"
+                                        alt="Even Legion"
+                                        width={24}
+                                        height={24}
+                                        className="size-6"
+                                    />
                                     <span className="text-base font-semibold">Even Legion</span>
                                 </a>
                             )}
@@ -114,7 +123,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                {(isPending || isFiltering) ? (
+                {isPending || isFiltering ? (
                     // Show skeleton loading state
                     <div className="flex flex-col gap-4 p-2">
                         <div className="flex flex-col gap-2">
@@ -129,19 +138,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 ) : (
                     <>
                         {/* Render main navigation (Welcome, Recruitment) when no active org */}
-                        {filteredNavMain.length > 0 && (
-                            <NavGroup items={filteredNavMain} />
-                        )}
+                        {filteredNavMain.length > 0 && <NavGroup items={filteredNavMain} />}
 
                         {/* Render authenticated navigation (Dashboard) when in org */}
-                        {filteredNavAuthenticated.length > 0 && (
-                            <NavGroup items={filteredNavAuthenticated} />
-                        )}
+                        {filteredNavAuthenticated.length > 0 && <NavGroup items={filteredNavAuthenticated} />}
 
                         {/* Render admin navigation when in org */}
-                        {filteredNavAdmin.length > 0 && (
-                            <NavGroup title="Administration" items={filteredNavAdmin} />
-                        )}
+                        {filteredNavAdmin.length > 0 && <NavGroup title="Administration" items={filteredNavAdmin} />}
                     </>
                 )}
             </SidebarContent>
@@ -175,20 +178,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuItem>
                     </SidebarMenu>
                 ) : session?.user ? (
-                    <NavUser user={{
-                        email: session.user.email ?? '',
-                        // @ts-expect-error user.nickname is a valid property
-                        username: session.user.nickname ?? session.user.username,
-                        avatar: session.user.image ?? 'https://github.com/shadcn.png'
-                    }} />
+                    <NavUser
+                        user={{
+                            email: session.user.email ?? '',
+                            // @ts-expect-error user.nickname is a valid property
+                            username: session.user.nickname ?? session.user.username,
+                            avatar: session.user.image ?? 'https://github.com/shadcn.png',
+                        }}
+                    />
                 ) : (
                     <SidebarMenu>
                         <SidebarMenuItem>
-                            <SidebarMenuButton
-                                className="data-[slot=sidebar-menu-button]:!p-1.5"
-                                onClick={onSignIn}
-                            >
-                                <LogIn className="!size-4" />
+                            <SidebarMenuButton className="data-[slot=sidebar-menu-button]:p-1.5!" onClick={onSignIn}>
+                                <LogIn className="size-4" />
                                 Sign In
                             </SidebarMenuButton>
                         </SidebarMenuItem>
@@ -196,5 +198,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 )}
             </SidebarFooter>
         </Sidebar>
-    )
+    );
 }

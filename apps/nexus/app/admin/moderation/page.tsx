@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@/server/users';
-import { checkPermissions } from '@/server/permissions';
+import { isAdmin } from '@/server/permissions';
 import {
     Card,
     CardHeader,
@@ -8,10 +8,8 @@ import {
 } from '@workspace/ui/components/card';
 
 export default async function Moderation() {
-    // Check if user has permission to access this page
-    const hasPermission = await checkPermissions({
-        admin: ['admin_dashboard']
-    });
+    // Check if user is a site admin
+    const hasPermission = await isAdmin();
 
     if (!hasPermission) {
         return (
@@ -21,7 +19,7 @@ export default async function Moderation() {
                         <CardTitle>Access Denied</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p>You do not have permission to access this page.</p>
+                        <p>You do not have permission to access this page. Only site administrators can access moderation tools.</p>
                     </CardContent>
                 </Card>
             </div>

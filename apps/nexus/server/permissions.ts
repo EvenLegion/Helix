@@ -3,31 +3,28 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
-export const isAdmin = async () => {
+/**
+ * Check if the current user is a site admin (via admin plugin)
+ * @returns Promise that resolves to true if user has admin role, false otherwise
+ */
+export const isAdmin = async (): Promise<boolean> => {
     try {
-        const { success, error } = await auth.api.hasPermission({
-            headers: await headers(),
-            body: {
-                permissions: {
-                    admin: ['admin_dashboard']
-                }
-            }
+        const session = await auth.api.getSession({
+            headers: await headers()
         });
 
-        if (error) {
-            return {
-                success: false,
-                error: error || 'Failed to check permissions'
-            }
+        if (!session?.user) {
+            return false;
         }
 
-        return success;
+        // Check if user has admin role via the admin plugin
+        // The admin plugin stores role in user.role field
+        const userRole = (session.user as any).role;
+
+        return userRole === 'admin';
     } catch (error) {
-        console.error('Error checking admin permissions:', error);
-        return {
-            success: false,
-            error: error || 'An unexpected error occurred while checking permissions'
-        };
+        console.error('Error checking admin status:', error);
+        return false;
     }
 }
 
@@ -55,4 +52,21 @@ export async function checkPermissions(permissions: Record<string, string[]>): P
         console.error('Error checking permissions:', error);
         return false;
     }
+}
+
+/**
+ * Check if the current user has specific permissions OR is a site admin
+ * Site admins bypass organization-level permission checks
+ * @param permissions Object with category and permission arrays
+ * @returns Promise that resolves to true if user is admin or has the permissions
+ */
+export async function checkPermissionsOrAdmin(permissions: Record<string, string[]>): Promise<boolean> {
+    // First check if user is a site admin
+    const adminStatus = await isAdmin();
+    if (adminStatus) {
+        return true;
+    }
+
+    // If not admin, check specific permissions
+    return checkPermissions(permissions);
 }

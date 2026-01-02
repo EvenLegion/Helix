@@ -25,6 +25,12 @@ const owner = ac.newRole({
 // Admin role for admin plugin - has all admin permissions including impersonate
 const adminRole = ac.newRole({
     ...adminAc.statements,
+    ac: ['create', 'update', 'delete'],
+    member: ['create', 'update', 'delete', 'read'],
+    organization: ['create', 'update', 'delete'],
+    invitation: ['create', 'cancel'],
+    recruitment: ['accept', 'reject', 'update', 'delete', 'apply'],
+    admin: ['admin_dashboard', 'moderation']
 });
 
 const moderator = ac.newRole({

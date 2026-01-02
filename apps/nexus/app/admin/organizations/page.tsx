@@ -9,11 +9,11 @@ import ActiveOrg from '@/components/admin/active-org';
 import { RemoveOrganizationDialog } from "@/components/admin/remove-organization-dialog";
 import { MemberDAL } from '@/dal/members';
 import { RoleDAL } from '@/dal/roles';
-import { checkPermissions } from '@/server/permissions';
+import { checkPermissionsOrAdmin } from '@/server/permissions';
 
 export default async function Organizations() {
-    // Check if user has permission to view organizations
-    const canViewOrganizations = await checkPermissions({
+    // Check if user is admin or has permission to view organizations
+    const canViewOrganizations = await checkPermissionsOrAdmin({
         member: ['read']
     });
 
@@ -48,23 +48,24 @@ export default async function Organizations() {
     );
 
     // Check permissions using the helper function
-    const canCreateRoles = await checkPermissions({
+    // Site admins bypass organization-level permissions
+    const canCreateRoles = await checkPermissionsOrAdmin({
         ac: ['create']
     });
 
-    const canUpdateRoles = await checkPermissions({
+    const canUpdateRoles = await checkPermissionsOrAdmin({
         ac: ['update']
     });
 
-    const canAddMembers = await checkPermissions({
+    const canAddMembers = await checkPermissionsOrAdmin({
         member: ['create']
     });
 
-    const canCreateOrganizations = await checkPermissions({
+    const canCreateOrganizations = await checkPermissionsOrAdmin({
         organization: ['create']
     });
 
-    const canDeleteOrganizations = await checkPermissions({
+    const canDeleteOrganizations = await checkPermissionsOrAdmin({
         organization: ['delete']
     });
 
