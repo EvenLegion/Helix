@@ -213,6 +213,8 @@ model Division {
   kind           String
   nicknamePrefix String?
   showRank       Boolean              @default(false)
+  emojiName      String?
+  emojiId        String?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   memberships    DivisionMembership[]
