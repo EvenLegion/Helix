@@ -142,9 +142,16 @@ async function pickDisplayDivision(userID: string) {
 	const log = childLogger({ mod: "rankSync", func: "pickDisplayDivision", userID });
 	const memberships = await prisma.divisionMembership.findMany({ where: { userId: userID }, include: { division: true } });
 	log.debug({ memberships: memberships.map(m => ({ code: m.division.code, kind: m.division.kind, showRank: m.division.showRank })) }, "pickDisplayDivision");
-	// Prefer combat with visible rank
+
+	// Priority: combat > industrial > null
+	// Prefer combat with visible rank (highest priority)
 	const combat = memberships.find(m => String(m.division.kind).toLowerCase() === "combat" && m.division.showRank);
 	if (combat) return combat.division;
+
+	// Fallback to industrial with visible rank (second priority)
+	const industrial = memberships.find(m => String(m.division.kind).toLowerCase() === "industrial" && m.division.showRank);
+	if (industrial) return industrial.division;
+
 	return null;
 }
 
@@ -180,6 +187,10 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 	} catch (e) { log.debug({ error: String((e as any)?.message || e) }, "memberFetchFailed"); member = null; }
 	// If no membership division, try to parse from DB nickname first, then guild nickname/display
 	if (!division) {
+		// Check if user has ANY memberships at all (to distinguish new users from users who left divisions)
+		const allMemberships = await prisma.divisionMembership.findMany({ where: { userId: userID } });
+		const hasAnyMembership = allMemberships.length > 0;
+
 		// Fetch user row to check DB nickname
 		const userRowForParse = await prisma.user.findUnique({ where: { id: userID }, select: { nickname: true } });
 		const candidate = cleanLabel(userRowForParse?.nickname ?? '') || cleanLabel(member ? (member.nickname ?? member.displayName) : '');
@@ -189,15 +200,24 @@ export async function syncNicknameAuto(params: { guild: any; userID: string }) {
 				if (parsed.division) {
 					division = parsed.division as any;
 					log.debug({ candidate, division: parsed.division.code }, "divisionParsedFromNickname");
-					// Backfill a DivisionMembership if missing
-					try {
-						const existing = await prisma.divisionMembership.findFirst({ where: { userId: userID, divisionId: parsed.division.id } });
-						if (!existing) {
-							// Ensure the user exists before creating division membership
-							await ensureUsersByIds([userID], "rankSync");
-							await prisma.divisionMembership.create({ data: { userId: userID, divisionId: parsed.division.id, lastComputedAt: new Date() } });
-						}
-					} catch { /* ignore */ }
+					// Only backfill if user has NO memberships (legacy user migration scenario)
+					// If they have memberships but none are showable, don't backfill
+					if (!hasAnyMembership) {
+						// Backfill a DivisionMembership if missing (legacy migration)
+						try {
+							const existing = await prisma.divisionMembership.findFirst({ where: { userId: userID, divisionId: parsed.division.id } });
+							if (!existing) {
+								// Ensure the user exists before creating division membership
+								await ensureUsersByIds([userID], "rankSync");
+								await prisma.divisionMembership.create({ data: { userId: userID, divisionId: parsed.division.id, lastComputedAt: new Date() } });
+								log.debug({ division: parsed.division.code }, "backfilledDivisionMembership");
+							}
+						} catch { /* ignore */ }
+					} else {
+						// User has memberships but none are showable - don't use parsed division
+						log.debug({ division: parsed.division.code }, "skippedParsedDivision:hasMemberships");
+						division = null;
+					}
 				}
 			} catch { /* ignore */ }
 		}

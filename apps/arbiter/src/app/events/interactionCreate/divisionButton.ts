@@ -1,8 +1,7 @@
-import type { ButtonInteraction, Client, Guild } from "discord.js";
-import { prisma, Division } from "@workspace/db";
+import type { ButtonInteraction, Client } from "discord.js";
 import { childLogger } from "@workspace/logger";
-import { syncNicknameForDivision } from "../../services/rankSync";
 import { ensureUsersByIds } from "../../utils/ensureUsers";
+import { joinDivision, leaveDivision } from "../../services/divisionManager";
 
 const log = childLogger({ mod: "divisionButton", event: "interactionCreate" });
 
@@ -17,15 +16,6 @@ const log = childLogger({ mod: "divisionButton", event: "interactionCreate" });
  * - Combat: Users must have exactly ONE combat division (default: LGN)
  * - Industrial: Users can have ZERO or ONE industrial division
  * - Only combat divisions show in nickname (showRank: true)
- *
- * Database Strategy:
- * We use deleteMany + create instead of update because divisionId is part of the
- * composite unique key (userId, divisionId). Switching divisions means creating a
- * new row with a different divisionId, not updating the existing row.
- *
- * LGN Special Handling:
- * LGN is kind="general" but acts as the default combat division. It bypasses
- * kind validation and is included in combat division queries.
  */
 export default async function (interaction: ButtonInteraction, client: Client) {
 	if (!interaction.isButton()) return;
@@ -71,56 +61,44 @@ export default async function (interaction: ButtonInteraction, client: Client) {
 
 /**
  * Handles the "Leave Division" button click
- * - Combat: Returns user to LGN
- * - Industrial: Removes industrial division
  */
 async function handleLeaveDivision(interaction: ButtonInteraction, divisionKind: string) {
-	const divisionIds = await getSamekindDivisionIds(divisionKind);
-
-	const result = await prisma.divisionMembership.deleteMany({
-		where: {
-			userId: interaction.user.id,
-			divisionId: { in: divisionIds },
-		},
-	});
-
-	if (result.count === 0) {
-		await handleNoDivisionToLeave(interaction, divisionKind);
+	if (!interaction.guild) {
+		await interaction.editReply({
+			content: "❌ This command can only be used in a server.",
+		});
 		return;
 	}
 
-	log.info(
-		{ userId: interaction.user.id, divisionKind, removedCount: result.count },
-		"User left division"
-	);
+	const result = await leaveDivision({
+		guild: interaction.guild,
+		userId: interaction.user.id,
+		divisionKind,
+	});
 
-	// Sync nickname back to LGN for combat divisions
-	if (interaction.guild && divisionKind === "combat") {
-		await syncNicknameAfterLeavingCombat(interaction.guild, interaction.user.id);
+	if (!result.success) {
+		await interaction.editReply({
+			content: `❌ Failed to leave division: ${result.error}`,
+		});
+		return;
 	}
+
+	if (result.wasNotMember) {
+		// User doesn't have any division of this kind to leave
+		await interaction.editReply({
+			content: `ℹ️ You don't have any ${divisionKind} division to leave.`,
+		});
+		return;
+	}
+
+	const leaveMessage =
+		divisionKind === "combat"
+			? `✅ You've left your combat division. Your nickname has been updated.`
+			: `✅ You've left your industrial division. Your nickname has been updated.`;
 
 	await interaction.editReply({
-		content: `✅ You've left your ${divisionKind} division.`,
+		content: leaveMessage,
 	});
-}
-
-/**
- * Handles when a user tries to leave but has no division of that kind
- */
-async function handleNoDivisionToLeave(interaction: ButtonInteraction, divisionKind: string) {
-	if (divisionKind === "combat") {
-		// Error: All users should have a combat division (at least LGN)
-		log.error({ userId: interaction.user.id }, "User has no combat division to leave");
-		await interaction.editReply({
-			content: `❌ Error: You don't have a combat division. Please contact staff.`,
-		});
-	} else {
-		// Normal: Industrial divisions are optional
-		log.info({ userId: interaction.user.id }, "User has no industrial division to leave");
-		await interaction.editReply({
-			content: `ℹ️ You don't have any industrial division to leave.`,
-		});
-	}
 }
 
 /**
@@ -131,195 +109,60 @@ async function handleJoinDivision(
 	divisionKind: string,
 	divisionCode: string
 ) {
-	const division = await findAndValidateDivision(divisionCode, divisionKind);
-
-	if (!division) {
-		log.error({ divisionCode }, "Division not found in database");
+	if (!interaction.guild) {
 		await interaction.editReply({
-			content: "❌ Division not found. Please contact staff.",
+			content: "❌ This command can only be used in a server.",
 		});
 		return;
 	}
 
-	const divisionIds = await getSamekindDivisionIds(divisionKind);
+	const result = await joinDivision({
+		guild: interaction.guild,
+		userId: interaction.user.id,
+		divisionCode,
+		divisionKind,
+	});
 
-	// Check if user already has this division
-	if (await userAlreadyHasOnlyThisDivision(interaction.user.id, division.id, divisionIds)) {
-		await handleAlreadyInDivision(interaction, division);
+	if (!result.success) {
+		await interaction.editReply({
+			content: result.error || "❌ Failed to join division. Please contact staff.",
+		});
 		return;
 	}
 
-	// Switch to the new division
-	await switchDivision(interaction.user.id, division.id, divisionIds);
+	// User already has this division
+	if (result.alreadyMember && result.division) {
+		// Use proper grammar: "You're already Legionnaire" vs "You're already in H.A.L.O."
+		const message =
+			result.division.code === "LGN"
+				? `✅ You're already **${result.division.name}**!`
+				: `✅ You're already in **${result.division.name}**!`;
 
-	log.info({ userId: interaction.user.id, divisionCode }, "Updated division membership");
-
-	// Sync nickname for combat divisions
-	if (interaction.guild) {
-		await syncNicknameForCombatDivision(interaction.guild, interaction.user.id, division.code);
+		await interaction.editReply({ content: message });
+		return;
 	}
 
-	// Send success message
-	const message = buildSuccessMessage(division, divisionKind);
-	await interaction.editReply({ content: message });
-}
-
-/**
- * Finds a division by code and validates it matches the expected kind
- */
-async function findAndValidateDivision(
-	divisionCode: string,
-	expectedKind: string
-): Promise<Division | null> {
-	const division = await prisma.division.findFirst({
-		where: { code: divisionCode },
-	});
-
-	if (!division) return null;
-
-	// Validate kind matches (except for LGN which is "general" but used for combat)
-	if (division.code !== "LGN" && division.kind.toLowerCase() !== expectedKind.toLowerCase()) {
-		log.error(
-			{ divisionCode, expectedKind, actualKind: division.kind },
-			"Division kind mismatch"
-		);
-		return null;
-	}
-
-	return division;
-}
-
-/**
- * Gets all division IDs of the same kind
- * For combat divisions, includes LGN (which is kind="general")
- */
-async function getSamekindDivisionIds(divisionKind: string): Promise<number[]> {
-	const divisions = await prisma.division.findMany({
-		where: {
-			OR: [
-				{ kind: { equals: divisionKind, mode: "insensitive" } },
-				// Include LGN for combat divisions since it's the default
-				...(divisionKind === "combat" ? [{ code: "LGN" }] : []),
-			],
-		},
-		select: { id: true },
-	});
-
-	return divisions.map((d) => d.id);
-}
-
-/**
- * Checks if the user has only this specific division (and no others of the same kind)
- */
-async function userAlreadyHasOnlyThisDivision(
-	userId: string,
-	divisionId: number,
-	samekindDivisionIds: number[]
-): Promise<boolean> {
-	const existingMembership = await prisma.divisionMembership.findFirst({
-		where: { userId, divisionId },
-	});
-
-	if (!existingMembership) return false;
-
-	// Check if they have any other divisions of the same kind
-	const otherMemberships = await prisma.divisionMembership.findMany({
-		where: {
-			userId,
-			divisionId: { in: samekindDivisionIds, not: divisionId },
-		},
-	});
-
-	return otherMemberships.length === 0;
-}
-
-/**
- * Handles the case where user is already in the division
- */
-async function handleAlreadyInDivision(interaction: ButtonInteraction, division: Division) {
-	log.info({ userId: interaction.user.id, divisionCode: division.code }, "User already has this division");
-
-	// Use proper grammar: "You're already Legionnaire" vs "You're already in H.A.L.O."
-	const message =
-		division.code === "LGN"
-			? `✅ You're already **${division.name}**!`
-			: `✅ You're already in **${division.name}**!`;
-
-	await interaction.editReply({ content: message });
-}
-
-/**
- * Switches user to a new division by deleting old memberships and creating a new one
- */
-async function switchDivision(
-	userId: string,
-	newDivisionId: number,
-	samekindDivisionIds: number[]
-) {
-	// Remove all existing divisions of this kind
-	await prisma.divisionMembership.deleteMany({
-		where: {
-			userId,
-			divisionId: { in: samekindDivisionIds },
-		},
-	});
-
-	// Create membership for the new division
-	await prisma.divisionMembership.create({
-		data: {
-			userId,
-			divisionId: newDivisionId,
-			lastComputedAt: new Date(),
-		},
-	});
-}
-
-/**
- * Syncs nickname after leaving a combat division (returns to LGN)
- */
-async function syncNicknameAfterLeavingCombat(guild: Guild, userId: string) {
-	try {
-		const result = await syncNicknameForDivision({
-			guild,
-			userID: userId,
-			divisionCode: "LGN",
-		});
-		log.info({ userId, result }, "Nickname sync completed after leaving");
-	} catch (error) {
-		log.error({ err: error, userId }, "Failed to sync nickname after leaving");
-	}
-}
-
-/**
- * Syncs nickname for combat divisions (no-op for industrial since they don't show in nickname)
- */
-async function syncNicknameForCombatDivision(guild: Guild, userId: string, divisionCode: string) {
-	try {
-		const result = await syncNicknameForDivision({
-			guild,
-			userID: userId,
-			divisionCode,
-		});
-		log.info({ userId, divisionCode, result }, "Nickname sync completed");
-	} catch (error) {
-		log.error({ err: error, userId, divisionCode }, "Failed to sync nickname");
-		// Don't fail the whole operation if nickname sync fails
+	// Successfully joined division
+	if (result.division) {
+		const message = buildSuccessMessage(result.division.name, divisionKind);
+		await interaction.editReply({ content: message });
 	}
 }
 
 /**
  * Builds the success message based on division type
+ * Note: Nickname priority is combat > industrial > LGN
  */
-function buildSuccessMessage(division: Division, divisionKind: string): string {
-	const isLGN = division.code === "LGN";
+function buildSuccessMessage(divisionName: string, divisionKind: string): string {
 	const isCombat = divisionKind === "combat";
+	const isIndustrial = divisionKind === "industrial";
 
-	if (isLGN) {
-		return `✅ You've returned to **${division.name}**! Your nickname has been updated.`;
-	} else if (isCombat) {
-		return `✅ You've joined **${division.name}**! Your nickname has been updated.`;
+	if (isCombat) {
+		return `✅ You've joined **${divisionName}**! Your nickname has been updated to show your combat division.`;
+	} else if (isIndustrial) {
+		return `✅ You've joined **${divisionName}**! Your nickname will show this division if you don't have a combat division.`;
 	} else {
-		// Industrial divisions don't show in nickname
-		return `✅ You've joined **${division.name}**!`;
+		// General division (LGN)
+		return `✅ You've joined **${divisionName}**!`;
 	}
 }

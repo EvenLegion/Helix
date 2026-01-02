@@ -3,7 +3,7 @@ import { MessageFlags, AttachmentBuilder } from "discord.js";
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CONFIG } from "../../config";
+import { CONFIG, DIVISION_ROLES } from "../../config";
 
 export const command: CommandData = {
     name: 'get-users',
@@ -23,7 +23,11 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 
     const ROLE_ID = CONFIG.LEGIONNAIRE_ROLE_ID; // Legionnaire Role ID
 
-    const selectedRole = CONFIG.SELECTED_DIVISION_ROLE_IDS;
+    // Get all division role IDs (combat + industrial)
+    const selectedRole: string[] = [
+        ...Object.values(DIVISION_ROLES.combat),
+        ...Object.values(DIVISION_ROLES.industrial),
+    ];
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

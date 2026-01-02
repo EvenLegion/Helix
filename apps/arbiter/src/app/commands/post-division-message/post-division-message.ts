@@ -7,9 +7,11 @@ import {
 	EmbedBuilder,
 	MessageFlags,
 	type TextChannel,
+	type Guild,
 } from "discord.js";
 import { forInteraction } from "@workspace/logger";
 import { Division, prisma } from "@workspace/db";
+import { CONFIG } from "../../config";
 
 type DivisionWithEmoji = Division & { emojiId: string; emojiName: string };
 
@@ -95,7 +97,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 			});
 		}
 
-		const embed = buildDivisionEmbed(divisionType, divisions, interaction.guild);
+		const embed = buildDivisionEmbed(divisionType, divisions, interaction.guild as unknown as Guild);
 		const buttons = createDivisionButtons(divisionType, divisions);
 		const rows = organizeButtonsIntoRows(buttons);
 
@@ -168,18 +170,24 @@ function addDivisionFields(
 /**
  * Adds footer instructions to the embed
  */
-function addFooterInstructions(embed: EmbedBuilder): void {
+function addFooterInstructions(embed: EmbedBuilder, divisionType: "combat" | "industrial"): void {
+	const instructions = [
+		"✅ Click a division button to join your division.",
+		"",
+		"🔄 Click a different division button to switch divisions.",
+		"",
+	];
+
+	instructions.push(`❌ Click the _Leave Division_ button to leave your ${divisionType} division.`);
+
+	if (divisionType === "combat") {
+		instructions.push("");
+		instructions.push("ℹ️ Click the _View Uniforms_ button to view approved Legion armor sets.");
+	}
+
 	embed.addFields({
 		name: "\u200B", // Empty field to separate footer
-		value: [
-			"✅ Click a division button to join your division.",
-			"",
-			"🔄 Click a different division button to switch divisions.",
-			"",
-			"❌ Click the _Leave Division_ button to return to Legionnaire.",
-			"",
-			"ℹ️ Click the _View Uniforms_ button to view approved Legion armor sets.",
-		].join("\n"),
+		value: instructions.join("\n"),
 		inline: false,
 	});
 }
@@ -190,10 +198,10 @@ function addFooterInstructions(embed: EmbedBuilder): void {
 function buildDivisionEmbed(
 	divisionType: "combat" | "industrial",
 	divisions: DivisionWithEmoji[],
-	guild: any
+	guild: Guild
 ): EmbedBuilder {
 	// Find the Legionnaire role (required to exist)
-	const legionnaireRole = guild.roles.cache.find((r: any) => r.name === "Legionnaire");
+	const legionnaireRole = guild.roles.cache.get(CONFIG.LEGIONNAIRE_ROLE_ID);
 	if (!legionnaireRole) {
 		throw new Error("Legionnaire role not found in server");
 	}
@@ -221,7 +229,7 @@ function buildDivisionEmbed(
 	addDivisionFields(embed, divisions, descriptions);
 
 	// Add footer instructions
-	addFooterInstructions(embed);
+	addFooterInstructions(embed, divisionType);
 
 	return embed;
 }
@@ -242,21 +250,12 @@ function createDivisionButtons(
 	);
 
 	// Add "Leave Division" button
-	if (divisionType === "combat") {
-		buttons.push(
-			new ButtonBuilder()
-				.setCustomId("division:combat:LGN")
-				.setLabel("Leave Division")
-				.setStyle(ButtonStyle.Danger)
-		);
-	} else {
-		buttons.push(
-			new ButtonBuilder()
-				.setCustomId("division:industrial:LEAVE")
-				.setLabel("Leave Division")
-				.setStyle(ButtonStyle.Danger)
-		);
-	}
+	buttons.push(
+		new ButtonBuilder()
+			.setCustomId(`division:${divisionType}:LEAVE`)
+			.setLabel("Leave Division")
+			.setStyle(ButtonStyle.Danger)
+	);
 
 	buttons.push(
 		new ButtonBuilder()
