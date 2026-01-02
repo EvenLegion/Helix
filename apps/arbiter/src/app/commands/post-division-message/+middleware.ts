@@ -1,36 +1,29 @@
 import { MiddlewareContext, stopMiddlewares } from "commandkit";
-import { MessageFlags } from "discord.js";
+import { MessageFlags, PermissionsBitField } from "discord.js";
 import { forInteraction } from "@workspace/logger";
-import { CONFIG } from "../../config";
+import { CONFIG, isDev } from "../../config";
 
-// Only Staff role should be able to run /post-division-message command
-const STAFF_ROLE_ID = CONFIG.STAFF_ROLE_ID;
-
+// Only Server Staff (or admins) can use /post-division-message (unless in dev/bypass)
 export async function beforeExecute(ctx: MiddlewareContext) {
 	const { interaction } = ctx;
 
-	// Dev-mode bypass: allow during local development or explicit override
-	const isDevEnv =
-		process.env.ENVIRONMENT === "development" || process.env.NODE_ENV === "development";
-	const bypass = process.env.DEV_BYPASS_MIDDLEWARE === "true";
-	if (isDevEnv || bypass) return;
+	// Allow in development or when explicitly bypassing
+	if (isDev() || CONFIG.DEV_BYPASS) return;
 
-	if (!interaction.inGuild()) return;
+	if (!interaction.inGuild()) return; // ignore DMs
 
-	// Resolve the member to check roles
-	let member = interaction.guild?.members.cache.get(interaction.user.id);
+	// Allow administrators universally
+	if (interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) return;
+
+	// Require Staff role
+	const STAFF = CONFIG.STAFF_ROLE_ID;
+	let member = interaction.guild?.members.cache.get(interaction.user.id) as any;
 	if (!member && interaction.guild) {
-		try {
-			member = await interaction.guild.members.fetch(interaction.user.id);
-		} catch {
-			member = null as any;
-		}
+		try { member = await interaction.guild.members.fetch(interaction.user.id); } catch { member = null; }
 	}
-
-	const allowed = (member as any)?.roles?.cache?.has?.(STAFF_ROLE_ID);
+	const allowed = (member as any)?.roles?.cache?.has?.(STAFF);
 	if (allowed) return;
 
-	// Not allowed — respond ephemerally and stop further middlewares/handler
 	if (interaction.isRepliable()) {
 		await interaction.reply({
 			content: "This command is only available to Server Staff.",
@@ -39,9 +32,6 @@ export async function beforeExecute(ctx: MiddlewareContext) {
 	}
 
 	const log = forInteraction(interaction).child({ mod: "middleware", group: "post-division-message" });
-	log.warn(
-		{ reason: "insufficient_role" },
-		"Blocked /post-division-message due to missing Staff role"
-	);
+	log.warn({ reason: "insufficient_role" }, "Blocked /post-division-message due to missing Staff role");
 	stopMiddlewares();
 }
