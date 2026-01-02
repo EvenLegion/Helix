@@ -21,7 +21,24 @@ export const CONFIG = {
 export const isDev = () => ["dev", "development", "local"].includes(CONFIG.ENV);
 
 // Division role mapping indexed by kind
-export const DIVISION_ROLES = {
+export const DIVISION_ROLES = isDev() ? {
+  // Development division roles
+  combat: {
+    HLO: process.env.DEV_HALO_ROLE_ID ?? "", // H.A.L.O. (dev)
+    VNG: process.env.DEV_VANGUARD_ROLE_ID ?? "", // V.A.N.G.U.A.R.D. (dev)
+    SPR: process.env.DEV_SPEAR_ROLE_ID ?? "", // S.P.E.A.R. (dev)
+    HVK: process.env.DEV_HAVOK_ROLE_ID ?? "", // H.A.V.O.K. (dev)
+    RFT: process.env.DEV_RAFT_ROLE_ID ?? "", // R.A.F.T. (dev)
+  },
+  industrial: {
+    DRL: process.env.DEV_DRILL_ROLE_ID ?? "", // D.R.I.L.L. (dev)
+    SCR: process.env.DEV_SCRAP_ROLE_ID ?? "", // S.C.R.A.P. (dev)
+    LOG: process.env.DEV_LOGI_ROLE_ID ?? "", // L.O.G.I. (dev)
+    TRD: process.env.DEV_TRADE_ROLE_ID ?? "", // T.R.A.D.E. (dev)
+    ARC: process.env.DEV_ARCH_ROLE_ID ?? "", // A.R.C.H. (dev)
+  },
+} as const : {
+  // Production division roles
   combat: {
     HLO: "1356438908212088863", // H.A.L.O.
     VNG: "1356438093988757686", // V.A.N.G.U.A.R.D.

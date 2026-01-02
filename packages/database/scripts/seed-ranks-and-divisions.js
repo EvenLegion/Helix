@@ -10,9 +10,7 @@ const CUMULATIVE = [
 
 const divisions = [
   ["LGN", "Legionnaire", "general", true, "LGN | ", null, null],
-  // TODO: Add emoji ID for division
-  ["HLO", "H.A.L.O.", "combat", true, "HLO | ", "HALO_Emblem", "PLACEHOLDER"],
-  // TODO: Add emoji ID for division
+  ["HLO", "H.A.L.O.", "combat", true, "HLO | ", "HALO_Emblem", "1370272683165749421"],
   [
     "VNG",
     "V.A.N.G.U.A.R.D.",
@@ -20,16 +18,12 @@ const divisions = [
     true,
     "VNG | ",
     "VANG_Emblem",
-    "PLACEHOLDER",
+    "1370272690623217664",
   ],
-  // TODO: Add emoji ID for division
-  ["SPR", "S.P.E.A.R.", "combat", true, "SPR | ", "SPR_Emblem", "PLACEHOLDER"],
-  // TODO: Add emoji ID for division
-  ["HVK", "H.A.V.O.K.", "combat", true, "HVK | ", "HVK_Emblem", "PLACEHOLDER"],
-  // TODO: Add emoji ID for division
-  ["RFT", "R.A.F.T.", "combat", true, "RFT | ", "RAFT_Emblem", "PLACEHOLDER"],
+  ["SPR", "S.P.E.A.R.", "combat", true, "SPR | ", "SPR_Emblem", "1370272692267389018"],
+  ["HVK", "H.A.V.O.K.", "combat", true, "HVK | ", "HVK_Emblem", "1370272695308259398"],
+  ["RFT", "R.A.F.T.", "combat", true, "RFT | ", "RAFT_Emblem", "1374196910151176273"],
   ["RPR", "R.E.A.P.E.R.", "combat", true, "RPR | ", null, null],
-  // TODO: Add emoji ID for division
   [
     "DRL",
     "D.R.I.L.L.",
@@ -37,9 +31,8 @@ const divisions = [
     true,
     "DRL | ",
     "DRILL_Emblem",
-    "PLACEHOLDER",
+    "1370272685678002266",
   ],
-  // TODO: Add emoji ID for division
   [
     "SCR",
     "S.C.R.A.P.",
@@ -47,9 +40,8 @@ const divisions = [
     true,
     "SCR | ",
     "SCRAP_Emblem",
-    "PLACEHOLDER",
+    "1370272687657844856",
   ],
-  // TODO: Add emoji ID for division
   [
     "LOG",
     "L.O.G.I.",
@@ -57,9 +49,8 @@ const divisions = [
     true,
     "LOG | ",
     "LOGI_Emblem",
-    "PLACEHOLDER",
+    "1370272686621724672",
   ],
-  // TODO: Add emoji ID for division
   [
     "TRD",
     "T.R.A.D.E.",
@@ -67,9 +58,8 @@ const divisions = [
     true,
     "TRD | ",
     "TRADE_Emblem",
-    "PLACEHOLDER",
+    "1370272689599811655",
   ],
-  // TODO: Add emoji ID for division
   [
     "ARC",
     "A.R.C.H.",
@@ -77,7 +67,7 @@ const divisions = [
     true,
     "ARC | ",
     "ARCH_Emblem",
-    "PLACEHOLDER",
+    "1370272684683825192",
   ],
   ["SEC", "Security", "staff", false, "SEC | ", null, null],
   ["ADMR", "Admiral", "staff", false, "ADMR | ", null, null],

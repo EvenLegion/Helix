@@ -73,3 +73,5 @@ my-turborepo/
 
 .github/chatmodes/*
 DiscordRoles.xlsx
+CLAUDE.md
+apps/nexus/.claude/settings.local.json
