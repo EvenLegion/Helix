@@ -56,6 +56,11 @@ export const menuItems = {
             icon: House,
             condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },
+        {
+            title: 'Newsletter',
+            url: '/newsletter',
+            icon: House,
+        }
     ],
     // Navigation items for users in an organization
     navAuthenticated: [
