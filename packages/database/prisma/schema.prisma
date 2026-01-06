@@ -16,26 +16,27 @@ datasource db {
 }
 
 model User {
-    id                 String              @id
-    username           String?
-    nickname           String?
-    name               String?
-    email              String?
-    emailVerified      Boolean?
-    image              String?
-    createdAt          DateTime            @default(now())
-    updatedAt          DateTime            @updatedAt
-    role               String?
-    banned             Boolean?            @default(false)
-    banReason          String?
-    banExpires         DateTime?
-    Merit              Merit[]
-    nameChangeRequests NameChangeRequest[]
-    accounts           Account[]
-    sessions           Session[]
-    Member             Member[]
-    Invitation         Invitation[]
-    auditLogs          AuditLog[]
+    id                      String                   @id
+    username                String?
+    nickname                String?
+    name                    String?
+    email                   String?
+    emailVerified           Boolean?
+    image                   String?
+    createdAt               DateTime                 @default(now())
+    updatedAt               DateTime                 @updatedAt
+    role                    String?
+    banned                  Boolean?                 @default(false)
+    banReason               String?
+    banExpires              DateTime?
+    Merit                   Merit[]
+    nameChangeRequests      NameChangeRequest[]
+    accounts                Account[]
+    sessions                Session[]
+    Member                  Member[]
+    Invitation              Invitation[]
+    auditLogs               AuditLog[]
+    recruitmentApplications RecruitmentApplication[]
 
     @@map("user")
     @@schema("nexus")
@@ -218,5 +219,31 @@ model AuditLog {
     @@index([action])
     @@index([createdAt])
     @@map("audit_log")
+    @@schema("nexus")
+}
+
+model RecruitmentApplication {
+    id                    String    @id @default(uuid())
+    userId                String
+    rsiHandle             String
+    age                   Int
+    combatExperience      Int
+    logisticsExperience   Int
+    supportExperience     Int
+    starCitizenExperience String?   @db.Text
+    top3ShipsWhy          String    @db.Text
+    whenStartPlayingSC    String    @db.Text
+    whyJoin               String    @db.Text
+    canCommitToDiscord    Boolean   @default(false)
+    status                String    @default("pending") // pending, accepted, rejected
+    appliedAt             DateTime  @default(now())
+    reviewedAt            DateTime?
+    reviewedBy            String?
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, status])
+    @@index([status, appliedAt])
+    @@map("recruitment_application")
     @@schema("nexus")
 }

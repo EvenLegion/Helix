@@ -1,4 +1,4 @@
-import { House, UserStar, Shield, Building2, Users } from 'lucide-react';
+import { House, UserStar, Shield, Building2, Users, Mail, BadgeCheck } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 
 export interface MenuItemContext {
@@ -53,13 +53,13 @@ export const menuItems = {
         {
             title: 'Recruitment',
             url: '/recruitment',
-            icon: House,
+            icon: BadgeCheck,
             condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },
         {
             title: 'Newsletter',
             url: '/newsletter',
-            icon: House,
+            icon: Mail,
         }
     ],
     // Navigation items for users in an organization

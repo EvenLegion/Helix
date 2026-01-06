@@ -16,6 +16,7 @@ import { Slider } from '@workspace/ui/components/slider';
 import { Separator } from '@workspace/ui/components/separator';
 import { Checkbox } from '@workspace/ui/components/checkbox';
 import { Check } from 'lucide-react';
+import { Button } from '@workspace/ui/components/button';
 
 const ApplicationFormSchema = z.object({
     rsiHandle: z
@@ -26,8 +27,6 @@ const ApplicationFormSchema = z.object({
         .number({ message: 'Please enter a valid number' })
         .min(18, { message: 'You must be at least 18 years old to apply' }) // TODO: Do we want this to be shown?
         .max(120, { message: 'Please enter a valid age' }),
-    timezone: z.string().min(3, { message: 'Please enter a valid timezone' }),
-    activeHours: z.string().min(1, { message: 'Please enter your active hours' }),
     combatExperience: z
         .number()
         .min(1, { message: 'Please rate your combat experience' })
@@ -40,7 +39,7 @@ const ApplicationFormSchema = z.object({
         .number()
         .min(1, { message: 'Please rate your support experience' })
         .max(5, { message: 'Please rate your support experience' }),
-    strikeTeamExperience: z.string().min(10, { message: 'Please describe your strike team experience' }),
+    starCitizenExperience: z.string().min(10, { message: 'Please describe your Star Citizen experience' }),
     top3ShipsWhy: z.string().min(10, { message: 'Please describe your top 3 ships and why' }),
     whenDidYouStartPlayingSC: z.string().min(10, { message: 'Please describe when you started playing Star Citizen' }),
     whyDoYouWantToJoin: z.string().min(10, { message: 'Please describe why you want to join our organization' }),
@@ -50,14 +49,11 @@ export function ApplicationForm({ session }: { session: any }) {
     const form = useForm<z.infer<typeof ApplicationFormSchema>>({
         resolver: zodResolver(ApplicationFormSchema),
         defaultValues: {
-            rsiHandle: session.user.username || '',
-            age: 18,
-            timezone: '',
-            activeHours: '',
+            rsiHandle: '',
             combatExperience: 1,
             logisticsExperience: 1,
             supportExperience: 1,
-            strikeTeamExperience: '',
+            starCitizenExperience: '',
             top3ShipsWhy: '',
         },
         mode: 'onBlur',
@@ -131,62 +127,20 @@ export function ApplicationForm({ session }: { session: any }) {
                                 />
                             </FieldGroup>
                         </div>
-                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <FieldGroup>
-                                <Controller
-                                    name="timezone"
-                                    control={form.control}
-                                    render={({ field, fieldState }) => (
-                                        <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
-                                            <Input
-                                                {...field}
-                                                id={field.name}
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="Enter your timezone"
-                                                autoComplete="off"
-                                            />
-                                            <FieldDescription>Please enter your timezone.</FieldDescription>
-                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                        </Field>
-                                    )}
-                                />
-                            </FieldGroup>
-                            <FieldGroup>
-                                <Controller
-                                    name="activeHours"
-                                    control={form.control}
-                                    render={({ field, fieldState }) => (
-                                        <Field data-invalid={fieldState.invalid}>
-                                            <FieldLabel htmlFor="activeHours">Active Hours</FieldLabel>
-                                            <Input
-                                                {...field}
-                                                id={field.name}
-                                                aria-invalid={fieldState.invalid}
-                                                placeholder="Enter your active hours"
-                                                autoComplete="off"
-                                            />
-                                            <FieldDescription>Please enter your active hours.</FieldDescription>
-                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                                        </Field>
-                                    )}
-                                />
-                            </FieldGroup>
-                        </div>
                         <Separator className="my-4" />
                         <h3 className="my-4 text-lg font-medium">Experience</h3>
                         <FieldGroup className="mt-4">
                             <Controller
-                                name="strikeTeamExperience"
+                                name="starCitizenExperience"
                                 control={form.control}
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel htmlFor="strikeTeamExperience">Strike Team Experience</FieldLabel>
+                                        <FieldLabel htmlFor="starCitizenExperience">Star Citizen Experience</FieldLabel>
                                         <Textarea
                                             {...field}
                                             id={field.name}
                                             aria-invalid={fieldState.invalid}
-                                            placeholder="Describe your strike team experience"
+                                            placeholder="Describe your star citizen experience"
                                             rows={4}
                                         />
                                         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -346,6 +300,9 @@ export function ApplicationForm({ session }: { session: any }) {
                                 </div>
                             </FieldGroup>
                         </div>
+                        <Button type="submit" className="mt-6">
+                            Submit Application
+                        </Button>
                     </form>
                 </CardContent>
             </Card>
