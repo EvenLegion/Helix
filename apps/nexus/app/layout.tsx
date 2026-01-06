@@ -11,7 +11,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
 import { SiteHeader } from "@/components/navigation/site-header";
 import { SessionRefresh } from "@/components/session-refresh";
-import { ImpersonationBanner } from "@/components/impersonate-banner";
 
 
 export const metadata: Metadata = {
@@ -30,7 +29,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     disableTransitionOnChange
                 >
                     <SessionRefresh />
-                    <ImpersonationBanner />
                     <SidebarProvider
                         style={
                             {

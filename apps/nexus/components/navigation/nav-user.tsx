@@ -1,6 +1,6 @@
 "use client"
 
-import { EllipsisVertical, CircleUser, LogOut } from "lucide-react";
+import { EllipsisVertical, CircleUser, LogOut, AlertTriangle, X } from "lucide-react";
 import {
     Avatar,
     AvatarFallback,
@@ -21,7 +21,11 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@workspace/ui/components/sidebar";
+import { Button } from "@workspace/ui/components/button";
 import { authClient } from "@/lib/auth-client";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function NavUser({
     user,
@@ -33,6 +37,73 @@ export function NavUser({
     }
 }) {
     const { isMobile } = useSidebar()
+    const router = useRouter();
+    const [mounted, setMounted] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isImpersonating, setIsImpersonating] = useState(false);
+    const [impersonatedUser, setImpersonatedUser] = useState<{
+        id: string;
+        name?: string;
+        email?: string;
+        username?: string;
+    } | null>(null);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // Check impersonation status
+    useEffect(() => {
+        if (!mounted) return;
+
+        const checkImpersonation = async () => {
+            try {
+                const sessionData = await authClient.getSession();
+
+                const impersonatedBy =
+                    sessionData.data?.session?.impersonatedBy ||
+                    (sessionData.data?.session as any)?.impersonatedBy ||
+                    (sessionData.data as any)?.impersonatedBy;
+
+                if (impersonatedBy && sessionData.data?.user) {
+                    setIsImpersonating(true);
+                    setImpersonatedUser({
+                        id: sessionData.data.user.id,
+                        name: sessionData.data.user.name || undefined,
+                        email: sessionData.data.user.email || undefined,
+                        // @ts-expect-error user.nickname and username are valid properties
+                        username: (sessionData.data.user.nickname ?? sessionData.data.user.username) || undefined,
+                    });
+                } else {
+                    setIsImpersonating(false);
+                    setImpersonatedUser(null);
+                }
+            } catch (error) {
+                console.error("Error checking impersonation:", error);
+                setIsImpersonating(false);
+                setImpersonatedUser(null);
+            }
+        };
+
+        checkImpersonation();
+        const interval = setInterval(checkImpersonation, 2000);
+        return () => clearInterval(interval);
+    }, [mounted]);
+
+    const handleStopImpersonation = async () => {
+        setIsLoading(true);
+        try {
+            await authClient.admin.stopImpersonating();
+            toast.success("Stopped impersonating user");
+            router.refresh();
+            window.location.reload();
+        } catch (error) {
+            console.error("Failed to stop impersonation:", error);
+            toast.error(error instanceof Error ? error.message : "Failed to stop impersonation");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const onSignOut = async () => {
         await authClient.signOut();
@@ -40,6 +111,36 @@ export function NavUser({
 
     return (
         <SidebarMenu>
+            {/* Impersonation Banner */}
+            {mounted && isImpersonating && impersonatedUser && (
+                <div className="mb-2 mx-2 p-2 bg-amber-500/10 dark:bg-amber-600/10 border border-amber-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-amber-600 dark:text-amber-500 truncate">
+                                Impersonating: {impersonatedUser.username || impersonatedUser.name || impersonatedUser.email}
+                            </p>
+                        </div>
+                    </div>
+                    <Button
+                        onClick={handleStopImpersonation}
+                        disabled={isLoading}
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-7 text-xs border-amber-500/30 hover:bg-amber-500/20"
+                    >
+                        {isLoading ? (
+                            <>Stopping...</>
+                        ) : (
+                            <>
+                                <X className="h-3 w-3 mr-1" />
+                                Stop Impersonating
+                            </>
+                        )}
+                    </Button>
+                </div>
+            )}
+
             <SidebarMenuItem>
                 <DropdownMenu>
                     <DropdownMenuTrigger render={(props) => (

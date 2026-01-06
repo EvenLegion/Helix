@@ -85,6 +85,7 @@ export function ApplicationForm({ session }: { session: any }) {
             <Card className="w-full">
                 <CardContent>
                     <form id="application-form" onSubmit={form.handleSubmit(onSubmit)}>
+                        <h2 className="mb-4 text-xl font-bold">Recruitment Application</h2>
                         <h3 className="mb-4 text-lg font-medium">Personal Information</h3>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <FieldGroup>
