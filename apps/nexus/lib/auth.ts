@@ -26,6 +26,24 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
+    session: {
+        // Session Lifespan: 30 days
+        expiresIn: 60 * 60 * 24 * 30,
+
+        // Refresh session after 1 day of activity,
+        refreshAfter: 60 * 60 * 24,
+
+        // Require fresh login (< 5 minutes) for sensitive actions
+        freshAge: 60 * 5,
+
+        // Enable cookie caching for reduce DB load
+        cookieCache: {
+            enabled: true,
+            maxAge: 60 * 5, // 5 minutes
+            stategy: "compact",
+            refreshCache: true, // Auto-refresh at 4 minutes
+        },
+    },
     emailAndPassword: {
         enabled: false,
     },
@@ -124,7 +142,6 @@ export const auth = betterAuth({
             }
         },
     },
-
     databaseHooks: {
         account: {
             create: {
