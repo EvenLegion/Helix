@@ -7,7 +7,7 @@ const statement = {
     member: ['create', 'update', 'delete', 'read'],
     organization: ['create', 'update', 'delete'],
     invitation: ['create', 'cancel'],
-    recruitment: ['accept', 'reject', 'update', 'delete', 'apply'],
+    recruitment: ['accept', 'reject', 'update', 'delete', 'view'],
     admin: ['admin_dashboard', 'moderation']
 } as const;
 
@@ -18,7 +18,7 @@ const owner = ac.newRole({
     member: ['create', 'update', 'delete', 'read'],
     organization: ['create', 'update', 'delete'],
     invitation: ['create', 'cancel'],
-    recruitment: ['accept', 'reject', 'update', 'delete', 'apply'],
+    recruitment: ['accept', 'reject', 'update', 'delete', 'view'],
     admin: ['admin_dashboard', 'moderation']
 });
 
@@ -29,7 +29,7 @@ const adminRole = ac.newRole({
     member: ['create', 'update', 'delete', 'read'],
     organization: ['create', 'update', 'delete'],
     invitation: ['create', 'cancel'],
-    recruitment: ['accept', 'reject', 'update', 'delete', 'apply'],
+    recruitment: ['accept', 'reject', 'update', 'delete', 'view'],
     admin: ['admin_dashboard', 'moderation']
 });
 

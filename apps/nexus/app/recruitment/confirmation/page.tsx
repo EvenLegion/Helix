@@ -3,6 +3,8 @@ import { Button } from '@workspace/ui/components/button';
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
+// TODO: Modify this page to what we actually want.
+// TODO: Prevent access to this page if no pending application exists and in an org.
 export default function RecruitmentConfirmationPage() {
     return (
         <div className="flex-2 min-h-svh items-center justify-center p-4">
