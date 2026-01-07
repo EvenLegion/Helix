@@ -139,15 +139,16 @@ model MeritType {
 }
 
 model Organization {
-    id               String             @id @default(uuid())
-    name             String
-    slug             String
-    logo             String?
-    metadata         String?
-    createdAt        DateTime           @default(now())
-    Member           Member[]
-    Invitation       Invitation[]
-    OrganizationRole OrganizationRole[]
+    id                      String                   @id @default(uuid())
+    name                    String
+    slug                    String
+    logo                    String?
+    metadata                String?
+    createdAt               DateTime                 @default(now())
+    Member                  Member[]
+    Invitation              Invitation[]
+    OrganizationRole        OrganizationRole[]
+    recruitmentApplications RecruitmentApplication[]
 
     @@unique([slug])
     @@map("organization")
@@ -225,6 +226,7 @@ model AuditLog {
 model RecruitmentApplication {
     id                    String    @id @default(uuid())
     userId                String
+    orgnaizationId        String?
     rsiHandle             String
     age                   Int
     combatExperience      Int
@@ -240,10 +242,29 @@ model RecruitmentApplication {
     reviewedAt            DateTime?
     reviewedBy            String?
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    organization Organization? @relation(fields: [orgnaizationId], references: [id], onDelete: SetNull)
 
     @@unique([userId, status])
     @@index([status, appliedAt])
     @@map("recruitment_application")
+    @@schema("nexus")
+}
+
+model DiscordNotificationQueue {
+    id              String    @id @default(uuid())
+    eventType       String // e.g. "application_submitted", "application_reviewed"
+    resourceId      String // e.g. RecruitmentApplication.id
+    recipientUserId String // Discord ID of the recipient
+    status          String    @default("pending") // pending, sent, failed
+    attemptCount    Int       @default(0)
+    lastAttemptAt   DateTime?
+    sentAt          DateTime?
+    errorMessage    String?
+    payload         String? // JSON with notification data
+    createdAt       DateTime  @default(now())
+
+    @@index([status, createdAt])
+    @@map("discord_notification_queue")
     @@schema("nexus")
 }
