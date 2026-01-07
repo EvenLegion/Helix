@@ -2,7 +2,16 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@workspace/ui/components/badge';
-import { ArrowUpDown, Shield, ShieldCheck, Users as UsersIcon, Ban, CheckCircle2, UserCheck, MoreHorizontal } from 'lucide-react';
+import {
+    ArrowUpDown,
+    Shield,
+    ShieldCheck,
+    Users as UsersIcon,
+    Ban,
+    CheckCircle2,
+    UserCheck,
+    MoreHorizontal,
+} from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import { authClient } from '@/lib/auth-client';
 import { useState, useEffect, useMemo } from 'react';
@@ -16,14 +25,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@workspace/ui/components/dropdown-menu';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@workspace/ui/components/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@workspace/ui/components/table';
 import {
     ColumnFiltersState,
     SortingState,
@@ -87,7 +89,7 @@ function SuperAdminButton({ user, canManageAdmin }: { user: User; canManageAdmin
 
             setIsAdmin(!isAdmin);
             toast.success(
-                `${user.username || user.nickname || user.id} is now ${newRole === 'admin' ? 'a super admin' : 'a regular user'}`
+                `${user.username || user.nickname || user.id} is now ${newRole === 'admin' ? 'a super admin' : 'a regular user'}`,
             );
             router.refresh();
         } catch (error) {
@@ -154,7 +156,7 @@ function ModeratorRoleButton({ user, canManageAdmin }: { user: User; canManageAd
 
             setIsModerator(!isModerator);
             toast.success(
-                `${user.username || user.nickname || user.id} is now ${newRole === 'moderator' ? 'a moderator' : 'a regular user'}`
+                `${user.username || user.nickname || user.id} is now ${newRole === 'moderator' ? 'a moderator' : 'a regular user'}`,
             );
             router.refresh();
         } catch (error) {
@@ -164,7 +166,6 @@ function ModeratorRoleButton({ user, canManageAdmin }: { user: User; canManageAd
             setIsToggling(false);
         }
     };
-    // TODO: Change all of the buttons colors
     return (
         <Button
             size="sm"
@@ -226,11 +227,7 @@ function ImpersonateUserButton({ user, canImpersonate }: { user: User; canImpers
             disabled={isImpersonating}
             title={`Impersonate ${user.username || user.nickname || user.id}`}
         >
-            {isImpersonating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-                <UsersIcon className="h-4 w-4" />
-            )}
+            {isImpersonating ? <Loader2 className="h-4 w-4 animate-spin" /> : <UsersIcon className="h-4 w-4" />}
         </Button>
     );
 }
@@ -271,9 +268,7 @@ function BanUserButton({ user, canBan }: { user: User; canBan: boolean }) {
             }
 
             setIsBanned(!isBanned);
-            toast.success(
-                `${user.username || user.nickname || user.id} has been ${isBanned ? 'unbanned' : 'banned'}`
-            );
+            toast.success(`${user.username || user.nickname || user.id} has been ${isBanned ? 'unbanned' : 'banned'}`);
             router.refresh();
         } catch (error) {
             console.error('Failed to toggle ban status:', error);
@@ -305,7 +300,7 @@ function BanUserButton({ user, canBan }: { user: User; canBan: boolean }) {
 
 function ActionsDropdown({
     user,
-    permissions
+    permissions,
 }: {
     user: User;
     permissions: { canManageAdmin: boolean; canImpersonate: boolean; canBan: boolean };
@@ -361,7 +356,9 @@ function ActionsDropdown({
             }
 
             setIsModerator(!isModerator);
-            toast.success(`${user.username || user.nickname || user.id} is now ${newRole === 'moderator' ? 'a moderator' : 'a regular user'}`);
+            toast.success(
+                `${user.username || user.nickname || user.id} is now ${newRole === 'moderator' ? 'a moderator' : 'a regular user'}`,
+            );
             router.refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Failed to toggle moderator status');
@@ -382,7 +379,9 @@ function ActionsDropdown({
             }
 
             setIsAdmin(!isAdmin);
-            toast.success(`${user.username || user.nickname || user.id} is now ${newRole === 'admin' ? 'a super admin' : 'a regular user'}`);
+            toast.success(
+                `${user.username || user.nickname || user.id} is now ${newRole === 'admin' ? 'a super admin' : 'a regular user'}`,
+            );
             router.refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Failed to toggle admin status');
@@ -482,9 +481,11 @@ function ActionsDropdown({
     );
 }
 
-function getUsersColumns(
-    permissions: { canManageAdmin: boolean; canImpersonate: boolean; canBan: boolean }
-): ColumnDef<User>[] {
+function getUsersColumns(permissions: {
+    canManageAdmin: boolean;
+    canImpersonate: boolean;
+    canBan: boolean;
+}): ColumnDef<User>[] {
     return [
         {
             accessorKey: 'id',
@@ -586,9 +587,7 @@ function getUsersColumns(
         {
             id: 'actions',
             header: 'Actions',
-            cell: ({ row }) => (
-                <ActionsDropdown user={row.original} permissions={permissions} />
-            ),
+            cell: ({ row }) => <ActionsDropdown user={row.original} permissions={permissions} />,
         },
     ];
 }
@@ -624,10 +623,10 @@ export function UsersTable({ users }: { users: User[] }) {
                 // Check admin plugin permissions
                 const [impersonateResult, banResult] = await Promise.all([
                     authClient.admin.hasPermission({
-                        permissions: { user: ['impersonate'] }
+                        permissions: { user: ['impersonate'] },
                     }),
                     authClient.admin.hasPermission({
-                        permissions: { user: ['ban'] }
+                        permissions: { user: ['ban'] },
                     }),
                 ]);
 
@@ -679,13 +678,10 @@ export function UsersTable({ users }: { users: User[] }) {
 
     const permissionsRef = useMemo(
         () => permissions,
-        [permissions.canManageAdmin, permissions.canImpersonate, permissions.canBan]
+        [permissions.canManageAdmin, permissions.canImpersonate, permissions.canBan],
     );
 
-    const columns = useMemo(
-        () => getUsersColumns(permissionsRef),
-        [permissionsRef]
-    );
+    const columns = useMemo(() => getUsersColumns(permissionsRef), [permissionsRef]);
 
     const table = useReactTable({
         data: users,
@@ -734,10 +730,7 @@ export function UsersTable({ users }: { users: User[] }) {
                     <TableBody>
                         {table.getRowModel().rows?.length ? (
                             table.getRowModel().rows.map((row) => (
-                                <TableRow
-                                    key={row.id}
-                                    data-state={row.getIsSelected() ? 'selected' : undefined}
-                                >
+                                <TableRow key={row.id} data-state={row.getIsSelected() ? 'selected' : undefined}>
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -771,4 +764,3 @@ export function UsersTable({ users }: { users: User[] }) {
         </div>
     );
 }
-

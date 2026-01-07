@@ -5,7 +5,6 @@ import { Card, CardHeader, CardContent } from '@workspace/ui/components/card';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 
-// TODO: Create recruitment page
 export default function Recruitment() {
     const router = useRouter();
     const { data: session } = authClient.useSession();

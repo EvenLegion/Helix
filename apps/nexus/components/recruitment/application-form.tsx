@@ -8,6 +8,9 @@ import * as z from 'zod';
 import { cn } from '@workspace/ui/lib/utils';
 
 import { useState } from 'react';
+0;
+import { useRouter } from 'next/navigation';
+import { submitRecruitmentApplication, checkPendingApplication } from '@/server/recruitment';
 import { Field, FieldLabel, FieldGroup, FieldDescription, FieldError } from '@workspace/ui/components/field';
 import { Card, CardContent } from '@workspace/ui/components/card';
 import { Input } from '@workspace/ui/components/input';
@@ -43,37 +46,93 @@ const ApplicationFormSchema = z.object({
     top3ShipsWhy: z.string().min(10, { message: 'Please describe your top 3 ships and why' }),
     whenDidYouStartPlayingSC: z.string().min(10, { message: 'Please describe when you started playing Star Citizen' }),
     whyDoYouWantToJoin: z.string().min(10, { message: 'Please describe why you want to join our organization' }),
+    canCommitToVC: z
+        .boolean()
+        .refine((val) => val === true, { message: 'You must commit to using Discord for voice comms' }),
 });
 
 export function ApplicationForm({ session }: { session: any }) {
+    const router = useRouter();
+    const [isLoading, setIsLoading] = useState(false);
+    const [isCheckingPending, setIsCheckingPending] = useState(true);
+
     const form = useForm<z.infer<typeof ApplicationFormSchema>>({
         resolver: zodResolver(ApplicationFormSchema),
         defaultValues: {
             rsiHandle: '',
+            age: undefined,
             combatExperience: 1,
             logisticsExperience: 1,
             supportExperience: 1,
             starCitizenExperience: '',
             top3ShipsWhy: '',
+            whenDidYouStartPlayingSC: '',
+            whyDoYouWantToJoin: '',
+            canCommitToVC: false,
         },
         mode: 'onBlur',
     });
 
-    function onSubmit(data: z.infer<typeof ApplicationFormSchema>) {
-        toast('Your application has submitted with the following data: ', {
-            description: (
-                <pre className="mt-2 rounded bg-gray-100 p-2 text-sm text-gray-800">
-                    <code>{JSON.stringify(data, null, 2)}</code>
-                </pre>
-            ),
-            position: 'bottom-right',
-            classNames: {
-                content: 'flex flex-col gap-2',
-            },
-            style: {
-                '--border-radius': 'calc(var(--radius)  + 4px)',
-            } as React.CSSProperties,
-        });
+    async function onSubmit(data: z.infer<typeof ApplicationFormSchema>) {
+        try {
+            setIsLoading(true);
+
+            // Submit to database via server function
+            const result = await submitRecruitmentApplication({
+                rsiHandle: data.rsiHandle,
+                age: data.age,
+                combatExperience: data.combatExperience,
+                logisticsExperience: data.logisticsExperience,
+                supportExperience: data.supportExperience,
+                starCitizenExperience: data.starCitizenExperience,
+                top3ShipsWhy: data.top3ShipsWhy,
+                whenStartPlayingSC: data.whenDidYouStartPlayingSC,
+                whyJoin: data.whyDoYouWantToJoin,
+                canCommitToDiscord: data.canCommitToVC,
+            });
+
+            // Redirect to confirmation page
+            router.push('/recruitment/confirmation');
+        } catch (error) {
+            console.error('Error submitting application:', error);
+
+            // Show error toast
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'An unexpected error occurred while submitting your application. Please try again later.',
+                {
+                    position: 'bottom-right',
+                    duration: 5000,
+                },
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    React.useEffect(() => {
+        async function checkPending() {
+            try {
+                const hasPending = await checkPendingApplication();
+                if (hasPending) {
+                    router.push('/recruitment/confirmation');
+                }
+            } catch (error) {
+                console.error('Error checking pending application:', error);
+            } finally {
+                setIsCheckingPending(false);
+            }
+        }
+
+        checkPending();
+    }, [router]);
+
+    if (isCheckingPending) {
+        // TODO: Make look nicer
+        // TODO: Need to prevent recruitment pages from being shown if they are a member of an org.
+        // TODO: Need to add a status or communication inside of Nexus(Maybe an enhancement)
+        return <div>Checking for existing application...</div>;
     }
 
     return (
@@ -118,7 +177,11 @@ export function ApplicationForm({ session }: { session: any }) {
                                                 aria-invalid={fieldState.invalid}
                                                 placeholder="Enter your age"
                                                 autoComplete="off"
-                                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 18)}
+                                                value={field.value ?? ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    field.onChange(value === '' ? undefined : parseInt(value, 10));
+                                                }}
                                             />
                                             <FieldDescription>Please enter your age.</FieldDescription>
                                             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -290,18 +353,31 @@ export function ApplicationForm({ session }: { session: any }) {
                         </FieldGroup>
                         <div className="mt-4">
                             <FieldGroup>
-                                <div className="flex items-center gap-3">
-                                    <Checkbox id="canCommitToVC">
-                                        <Check className="h-4 w-4" />
-                                    </Checkbox>
-                                    <FieldLabel htmlFor="canCommitToVC" className="mb-0">
-                                        Can you commit to using discord for voice comms?
-                                    </FieldLabel>
-                                </div>
+                                <Controller
+                                    name="canCommitToVC"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <div className="flex items-center gap-3">
+                                                <Checkbox
+                                                    id="canCommitToVC"
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                </Checkbox>
+                                                <FieldLabel htmlFor="canCommitToVC" className="mb-0">
+                                                    Can you commit to using discord for voice comms?
+                                                </FieldLabel>
+                                            </div>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                        </Field>
+                                    )}
+                                />
                             </FieldGroup>
                         </div>
-                        <Button type="submit" className="mt-6">
-                            Submit Application
+                        <Button type="submit" className="mt-6" disabled={isLoading}>
+                            {isLoading ? 'Submitting...' : 'Submit Application'}
                         </Button>
                     </form>
                 </CardContent>
