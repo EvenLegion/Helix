@@ -38,7 +38,7 @@ const moderator = ac.newRole({
 });
 
 const user = ac.newRole({
-    recruitment: ['apply']
+    recruitment: ['view']
 });
 
 export { ac, owner, adminRole, user, moderator, statement };
