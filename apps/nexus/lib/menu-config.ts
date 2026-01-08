@@ -51,6 +51,13 @@ export const menuItems = {
             condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },
         {
+            title: 'Dashboard',
+            url: '/dashboard',
+            icon: House,
+            requiresActiveOrg: true,
+            // No permissions required, just needs to be in org
+        },
+        {
             title: 'Recruitment',
             url: '/recruitment',
             icon: BadgeCheck,
@@ -64,13 +71,7 @@ export const menuItems = {
     ],
     // Navigation items for users in an organization
     navAuthenticated: [
-        {
-            title: 'Dashboard',
-            url: '/dashboard',
-            icon: House,
-            requiresActiveOrg: true,
-            // No permissions required, just needs to be in org
-        }
+
     ],
     // Admin navigation items (shown only when in organization and with proper permissions)
     navAdmin: [
@@ -90,6 +91,26 @@ export const menuItems = {
                     return false;
                 } catch (error) {
                     console.error('Error checking permissions for Dashboard menu:', error);
+                    return false;
+                }
+            },
+        },
+        {
+            title: 'Recruitment',
+            url: '/recruitment/admin',
+            icon: BadgeCheck,
+            requiresActiveOrg: false,
+            condition: async (context: MenuItemContext) => {
+                // Check if user has admin role OR recruitment:view permission
+                try {
+                    if (context.userRole === 'admin') {
+                        return true;
+                    }
+
+                    const hasRecruitmentPermission = await context.hasPermission({ recruitment: ['view'] });
+                    return hasRecruitmentPermission;
+                } catch (error) {
+                    console.error('Error checking permissions for Recruitment menu:', error);
                     return false;
                 }
             },

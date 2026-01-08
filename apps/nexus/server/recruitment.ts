@@ -1,8 +1,12 @@
 "use server";
 
+import { prisma } from '@workspace/db';
 import { getCurrentUser } from './users';
 import { RecruitmentApplicationDAL } from '@/dal/recruitment-application';
 import { logSuccess, logDenied, logError } from './audit';
+import { checkPermissions } from './permissions';
+import { MemberDAL } from '@/dal/members';
+import { DiscordNotificationDAL } from '@/dal/discord-notifications';
 
 /**
  * Submit a recruitment application
@@ -222,4 +226,363 @@ export async function getApplcicationById(applicationId: string) {
     });
 
     return application;
+}
+
+/**
+ * Get all applications (for recruiters)
+ * Security: Requires recruitment:view permission
+ */
+export async function getAllApplications(filters?: { status?: string }) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'recruitment.list',
+            resource: 'recruitment_application',
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('User not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        recruitment: ['view']
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.list',
+            resource: 'recruitment_application',
+            errorMessage: 'Insufficient permissions to view applications',
+        });
+        throw new Error('You do not have permission to view applications');
+    }
+
+    const applications = await RecruitmentApplicationDAL.findAllWithFilters(filters);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'recruitment.list',
+        resource: 'recruitment_application',
+        metadata: {
+            count: applications.length,
+        },
+    });
+
+    return applications;
+}
+
+/**
+ * Get recruitment statistics
+ * Security: Requires recruitment:view permission
+ */
+export async function getRecruitmentStatistics() {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'recruitment.stats',
+            resource: 'recruitment_application',
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('User not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        recruitment: ['view']
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.stats',
+            resource: 'recruitment_application',
+            errorMessage: 'Insufficient permissions to view recruitment statistics',
+        });
+        throw new Error('You do not have permission to view recruitment statistics');
+    }
+
+    // Get org member count
+    const member = await MemberDAL.findByUserId(currentUser.id);
+    let totalMembers = 0;
+
+    if (member?.organizationId) {
+        const members = await prisma.member.count({
+            where: { organizationId: member.organizationId }
+        });
+        totalMembers = members;
+    }
+
+    const stats = await RecruitmentApplicationDAL.getStatistics(
+        member?.organizationId
+    );
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'recruitment.stats',
+        resource: 'recruitment_application',
+    });
+
+    return {
+        totalMembers,
+        pendingCount: stats.pending,
+        acceptedLast7Days: stats.acceptedLast7Days,
+        totalProcessed: stats.accepted + stats.rejected,
+    };
+}
+
+/**
+ * Accept recruitment application
+ * Security: Requires recruitment:accept permission
+ */
+export async function acceptApplication(applicationId: string) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'recruitment.accept',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('User not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        recruitment: ['accept']
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.accept',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Insufficient permissions to accept applications',
+        });
+        throw new Error('You do not have permission to accept applications');
+    }
+
+    // Fetch Application
+    const application = await RecruitmentApplicationDAL.findById(applicationId);
+
+    if (!application) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.accept',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Application not found',
+        });
+        throw new Error('Application not found');
+    }
+
+    if (application.status !== 'pending') {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.accept',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: `Application already ${application.status}`,
+        });
+        throw new Error(`Cannot accept application that is already ${application.status}`);
+    }
+
+    // Update Status
+    const updated = await RecruitmentApplicationDAL.updateStatus(
+        applicationId,
+        'accepted',
+        currentUser.id
+    );
+
+    // Add user to organization as member
+    if (application.organizationId) {
+        const memberExists = await MemberDAL.exists(
+            application.userId,
+            application.organizationId
+        );
+
+        if (!memberExists) {
+            await MemberDAL.create({
+                userId: application.userId,
+                organizationId: application.organizationId,
+                role: 'legionnaire'
+            })
+        }
+    }
+
+    // Queue Discord Notificaiton
+    await DiscordNotificationDAL.queue({
+        eventType: 'application_accepted',
+        resourceId: applicationId,
+        recipientUserId: application.userId,
+        payload: {
+            rsiHandle: application.rsiHandle,
+            reviewerName: currentUser.nickname || currentUser.username || 'A Recruiter',
+        },
+    });
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'recruitment.accept',
+        resource: 'recruitment_application',
+        resourceId: applicationId,
+        changes: {
+            status: { from: 'pending', to: 'accepted'},
+            reviewedBy: currentUser.id
+        },
+    });
+
+    return { success: true, application: updated };
+}
+
+/**
+ * Reject recruitment application
+ * Security: Requires recruitment:reject permission
+ */
+export async function rejectApplication(applicationId: string, reason?: string) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'recruitment.reject',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('User not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        recruitment: ['reject']
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.reject',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Insufficient permissions to reject applications',
+        });
+        throw new Error('You do not have permission to reject applications');
+    }
+
+    // Fetch Application
+    const application = await RecruitmentApplicationDAL.findById(applicationId);
+
+    if (!application) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.reject',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Application not found',
+        });
+        throw new Error('Application not found');
+    }
+
+    if (application.status !== 'pending') {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.reject',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: `Application already ${application.status}`,
+        });
+        throw new Error(`Cannot reject application that is already ${application.status}`);
+    }
+
+    const updated = await RecruitmentApplicationDAL.updateStatus(
+        applicationId,
+        'rejected',
+        currentUser.id
+    );
+
+    // Queue Discord Notificaiton
+    await DiscordNotificationDAL.queue({
+        eventType: 'application_rejected',
+        resourceId: applicationId,
+        recipientUserId: application.userId,
+        payload: {
+            rsiHandle: application.rsiHandle,
+            reviewerName: currentUser.nickname || currentUser.username || 'A Recruiter',
+            reason: reason || 'No reason provided',
+        },
+    });
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'recruitment.reject',
+        resource: 'recruitment_application',
+        resourceId: applicationId,
+        changes: {
+            status: { from: 'pending', to: 'rejected'},
+            reviewedBy: currentUser.id
+        },
+        metadata: {
+            applicationUserId: application.userId,
+            reason
+        }
+    });
+
+    return { success: true, application: updated };
+}
+
+/**
+ * Delete recruitment application
+ * Security: Requires recruitment:delete permission
+ */
+export async function deleteApplication(applicationId: string) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'recruitment.delete',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('Not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        recruitment: ['delete']
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.delete',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Missing recruitment:delete permission',
+        });
+        throw new Error('Unauthorized');
+    }
+
+    const application = await RecruitmentApplicationDAL.findById(applicationId);
+
+    if (!application) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.delete',
+            resource: 'recruitment_application',
+            resourceId: applicationId,
+            errorMessage: 'Application not found',
+        });
+        throw new Error('Application not found');
+    }
+
+    await RecruitmentApplicationDAL.delete(applicationId);
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'recruitment.delete',
+        resource: 'recruitment_application',
+        resourceId: applicationId,
+        metadata: { applicantUserId: application.userId },
+    });
+
+    return { success: true };
 }

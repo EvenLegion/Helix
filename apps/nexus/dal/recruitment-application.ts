@@ -173,4 +173,68 @@ export class RecruitmentApplicationDAL {
 
         return { pending, accepted, rejected };
     }
+
+    /**
+     * Get recruitments statistics
+     */
+    static async getStatistics(organizationId?: string) {
+        const where = organizationId ? { organizationId } : {};
+
+        const [pending, accepted, rejected, total] = await Promise.all([
+            prisma.recruitmentApplication.count({
+                 where: { ...where, status: 'pending' }
+                }),
+            prisma.recruitmentApplication.count({
+                where: { ...where, status: 'accepted' }
+                }),
+            prisma.recruitmentApplication.count({
+                 where: { ...where, status: 'rejected' }
+                }),
+            prisma.recruitmentApplication.count({ where }),
+        ]);
+
+        // Count accepted applications in the last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const acceptedLast7Days = await prisma.recruitmentApplication.count({
+            where: {
+                ...where,
+                status: 'accepted',
+                reviewedAt: {
+                    gte: sevenDaysAgo
+                }
+            }
+        });
+
+        return {
+            pending,
+            accepted,
+            rejected,
+            total,
+            acceptedLast7Days
+        };
+    }
+
+    /**
+     * Get all applications with optional filtering
+     */
+    static async findAllWithFilters(filters?: {
+        status?: string,
+        organizationId?: string,
+    }) {
+        return prisma.recruitmentApplication.findMany({
+            where: filters,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                    }
+                }
+            },
+            orderBy: { appliedAt: 'desc' },
+        });
+    }
 }

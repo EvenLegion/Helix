@@ -18,8 +18,14 @@ import { Textarea } from '@workspace/ui/components/textarea';
 import { Slider } from '@workspace/ui/components/slider';
 import { Separator } from '@workspace/ui/components/separator';
 import { Checkbox } from '@workspace/ui/components/checkbox';
+import { Switch } from '@workspace/ui/components/switch';
 import { Check } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
+
+// TODO: Add reason why false for Can Commit to VC
+// TODO: Just throwing this here because i want to look into DMing user for accepted or rejected
+// TODO: Same as above but for looking into when a user signs in it asks them to join the discord if they are not already there.
+// TODO: Also change the login process potentially to a sign in page with disclaimers
 
 const ApplicationFormSchema = z.object({
     rsiHandle: z
@@ -46,9 +52,7 @@ const ApplicationFormSchema = z.object({
     top3ShipsWhy: z.string().min(10, { message: 'Please describe your top 3 ships and why' }),
     whenDidYouStartPlayingSC: z.string().min(10, { message: 'Please describe when you started playing Star Citizen' }),
     whyDoYouWantToJoin: z.string().min(10, { message: 'Please describe why you want to join our organization' }),
-    canCommitToVC: z
-        .boolean()
-        .refine((val) => val === true, { message: 'You must commit to using Discord for voice comms' }),
+    canCommitToVC: z.boolean().optional(),
 });
 
 export function ApplicationForm({ session }: { session: any }) {
@@ -88,7 +92,7 @@ export function ApplicationForm({ session }: { session: any }) {
                 top3ShipsWhy: data.top3ShipsWhy,
                 whenStartPlayingSC: data.whenDidYouStartPlayingSC,
                 whyJoin: data.whyDoYouWantToJoin,
-                canCommitToDiscord: data.canCommitToVC,
+                canCommitToDiscord: data.canCommitToVC ?? false,
             });
 
             // Redirect to confirmation page
@@ -357,20 +361,19 @@ export function ApplicationForm({ session }: { session: any }) {
                                     name="canCommitToVC"
                                     control={form.control}
                                     render={({ field, fieldState }) => (
-                                        <Field data-invalid={fieldState.invalid}>
+                                        <Field>
                                             <div className="flex items-center gap-3">
-                                                <Checkbox
+                                                <FieldLabel htmlFor="canCommitToVC" className="mb-0">
+                                                    Toggle on if you can commit to using Discord for voice comms.
+                                                </FieldLabel>
+                                                <Switch
                                                     id="canCommitToVC"
                                                     checked={field.value}
                                                     onCheckedChange={field.onChange}
                                                 >
                                                     <Check className="h-4 w-4" />
-                                                </Checkbox>
-                                                <FieldLabel htmlFor="canCommitToVC" className="mb-0">
-                                                    Can you commit to using discord for voice comms?
-                                                </FieldLabel>
+                                                </Switch>
                                             </div>
-                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
                                     )}
                                 />

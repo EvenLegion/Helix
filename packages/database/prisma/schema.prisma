@@ -226,7 +226,7 @@ model AuditLog {
 model RecruitmentApplication {
     id                    String    @id @default(uuid())
     userId                String
-    orgnaizationId        String?
+    organizationId        String?
     rsiHandle             String
     age                   Int
     combatExperience      Int
@@ -243,7 +243,7 @@ model RecruitmentApplication {
     reviewedBy            String?
 
     user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-    organization Organization? @relation(fields: [orgnaizationId], references: [id], onDelete: SetNull)
+    organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
     @@unique([userId, status])
     @@index([status, appliedAt])
