@@ -26,6 +26,7 @@ import { Button } from '@workspace/ui/components/button';
 // TODO: Just throwing this here because i want to look into DMing user for accepted or rejected
 // TODO: Same as above but for looking into when a user signs in it asks them to join the discord if they are not already there.
 // TODO: Also change the login process potentially to a sign in page with disclaimers
+// TODO: Need to adjust unique constraint to allow multiple rejects but only one rejected at a time and if users has accepted then no new apps.
 
 const ApplicationFormSchema = z.object({
     rsiHandle: z
