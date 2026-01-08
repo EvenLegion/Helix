@@ -59,6 +59,11 @@ function getColumns(permissions: {
             ),
         },
         {
+            accessorKey: 'user.id',
+            header: 'User ID',
+            cell: ({ row }) => row.original.userId,
+        },
+        {
             accessorKey: 'user.username',
             header: 'Username',
             cell: ({ row }) => row.original.user.username || 'N/A',
