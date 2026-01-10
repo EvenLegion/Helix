@@ -16,31 +16,33 @@ datasource db {
 }
 
 model User {
-    id                      String                   @id
-    username                String?
-    nickname                String?
-    name                    String?
-    email                   String?
-    emailVerified           Boolean?
-    image                   String?
-    createdAt               DateTime                 @default(now())
-    updatedAt               DateTime                 @updatedAt
-    role                    String?
-    banned                  Boolean?                 @default(false)
-    banReason               String?
-    banExpires              DateTime?
-    Merit                   Merit[]
-    nameChangeRequests      NameChangeRequest[]
-    accounts                Account[]
-    sessions                Session[]
-    Member                  Member[]
-    Invitation              Invitation[]
-    auditLogs               AuditLog[]
-    recruitmentApplications RecruitmentApplication[] @relation("ApplicantUser")
-    reviewedApplications    RecruitmentApplication[] @relation("ReviewerUser")
+  id                       String                    @id
+  username                 String?
+  nickname                 String?
+  preferredName            String?
+  name                     String?
+  email                    String?
+  emailVerified            Boolean?
+  image                    String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  role                    String?
+  banned                  Boolean?                 @default(false)
+  banReason               String?
+  banExpires              DateTime?
+  Merit                    Merit[]
+  nameChangeRequests       NameChangeRequest[]
+  accounts                 Account[]
+  sessions                 Session[]
+  divisionMemberships      DivisionMembership[]
+  eventSessionParticipants EventSessionParticipant[]
+  Member                  Member[]
+  Invitation              Invitation[]
+  auditLogs               AuditLog[]
+  recruitmentApplications RecruitmentApplication[] @relation("ApplicantUser")
+  reviewedApplications    RecruitmentApplication[] @relation("ReviewerUser")
 
-    @@map("user")
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Session {
@@ -58,8 +60,7 @@ model Session {
 
     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@map("session")
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Account {
@@ -78,8 +79,7 @@ model Account {
     updatedAt             DateTime  @updatedAt
     user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@map("account")
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model Verification {
@@ -90,183 +90,331 @@ model Verification {
     createdAt  DateTime? @default(now())
     updatedAt  DateTime? @updatedAt
 
-    @@map("verification")
-    @@schema("nexus")
+  @@schema("nexus")
 }
 
 model NameChangeRequest {
-    id            Int      @id @default(autoincrement())
-    userId        String
-    currentName   String
-    requestedName String
-    reason        String
-    denyReason    String?
-    approved      Boolean  @default(false)
-    approvedBy    String?
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
-    user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            Int      @id @default(autoincrement())
+  userId        String
+  currentName   String
+  requestedName String
+  reason        String
+  denyReason    String?
+  approved      Boolean  @default(false)
+  approvedBy    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@map("name_change_request")
-    @@schema("arbiter")
+  @@map("nameChangeRequest")
+  @@schema("arbiter")
 }
 
 model Merit {
-    userID          String    @id
-    merits          Int
-    description     String    @db.VarChar(255)
-    additonal_notes String    @db.VarChar(255)
-    awarded_by      String
-    created_at      DateTime  @default(now())
-    updated_at      DateTime  @updatedAt
-    type_id         Int
-    merit_type      MeritType @relation(fields: [type_id], references: [id])
-    user            User      @relation(fields: [userID], references: [id])
+  id              Int       @id @default(autoincrement())
+  userID          String    @db.VarChar(19)
+  merits          Int
+  description     String    @db.VarChar(255)
+  additionalNotes String    @db.VarChar(255)
+  awardedBy       String
+  createdAt       DateTime  @default(now())
+  typeId          Int
+  updatedAt       DateTime  @updatedAt
+  meritType       MeritType @relation(fields: [typeId], references: [id])
+  user            User      @relation(fields: [userID], references: [id])
 
-    @@map("merit")
-    @@schema("arbiter")
+  @@index([userID])
+  /// Ensure per-session, per-type, per-user event awards are unique when using
+  /// additionalNotes formatted as: "Awarded via event session <sessionId>"
+  @@unique([userID, typeId, additionalNotes])
+  @@map("merit")
+  @@schema("arbiter")
 }
 
 model MeritType {
-    id          Int      @id
-    name        String   @db.VarChar(100)
-    description String   @db.VarChar(255)
-    created_at  DateTime @default(now())
-    updated_at  DateTime @updatedAt
-    merit       Merit[]
+  id                 Int            @id
+  name               String         @db.VarChar(100)
+  description        String         @db.VarChar(255)
+  value              Int
+  /// Controls the display order in UIs (lower first). 0 = default.
+  displayIndex       Int            @default(0)
+  minPercentPresent  Int            @default(0) // Minimum % of session present (0-100)
+  minPercentNotMuted Int            @default(0) // Minimum % of session not muted (0-100)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  eventSessions      EventSession[]
+  merit              Merit[]
+  isEvent            Boolean        @default(false) // True if this type is used for event sessions
 
-    @@map("merit_type")
-    @@schema("arbiter")
+  @@map("meritType")
+  @@schema("arbiter")
+}
+
+/// Event session within a guild voice channel
+model EventSession {
+  id               Int                       @id @default(autoincrement())
+  /// If set, this session is part of a group whose root session has this id
+  rootSessionId    Int?
+  guildId          String
+  channelId        String
+  /// True if the voice/stage channel was created by the bot
+  createdByBot     Boolean                   @default(false)
+  startedBy        String
+  startedAt        DateTime                  @default(now())
+  endedAt          DateTime?
+  status           String                    @default("ACTIVE") @db.VarChar(16)
+  meritTypeId      Int?
+  /// Optional custom description to use when awarding merits from this event
+  awardDescription String?                   @db.VarChar(255)
+  /// Mark when a review was finalized (awarded or explicitly none) and by whom
+  reviewFinalizedAt DateTime?
+  reviewFinalizedBy String?
+  meritType        MeritType?                @relation(fields: [meritTypeId], references: [id])
+  root             EventSession?             @relation("EventSessionGroup", fields: [rootSessionId], references: [id])
+  children         EventSession[]            @relation("EventSessionGroup")
+  participants     EventSessionParticipant[]
+
+  @@index([guildId, channelId, status])
+  @@index([rootSessionId, status])
+  @@map("eventSession")
+  @@schema("arbiter")
+}
+
+/// Aggregate participation per user for an event session
+model EventSessionParticipant {
+  id                   Int          @id @default(autoincrement())
+  eventSessionId       Int
+  userId               String
+  totalSecondsPresent  Int          @default(0)
+  totalSecondsSpeaking Int          @default(0)
+  lastJoinAt           DateTime?
+  lastSpeakAt          DateTime?
+  updatedAt            DateTime     @updatedAt
+  session              EventSession @relation(fields: [eventSessionId], references: [id], onDelete: Cascade)
+  user                 User         @relation(fields: [userId], references: [id])
+
+  @@unique([eventSessionId, userId])
+  @@map("eventSessionParticipant")
+  @@schema("arbiter")
+}
+
+model Event {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(100)
+  description String    @db.VarChar(255)
+  createdAt   DateTime  @default(now())
+  eventDate   DateTime
+  typeId      Int
+  updatedAt   DateTime  @updatedAt
+  eventType   EventType @relation(fields: [typeId], references: [id])
+
+  @@map("event")
+  @@schema("arbiter")
+}
+
+model EventType {
+  id          Int      @id
+  name        String   @db.VarChar(100)
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Event       Event[]
+
+  @@map("eventType")
+  @@schema("arbiter")
+}
+
+/// Divisions for display and rules
+model Division {
+  id             Int                  @id @default(autoincrement())
+  code           String               @unique
+  name           String
+  kind           String
+  nicknamePrefix String?
+  showRank       Boolean              @default(false)
+  emojiName      String?
+  emojiId        String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  memberships    DivisionMembership[]
+
+  @@map("division")
+  @@schema("arbiter")
+}
+
+/// Global cumulative merits required for each level (1..40)
+model RankLevel {
+  level            Int @id
+  cumulativeMerits Int
+
+  @@map("rankLevel")
+  @@schema("arbiter")
+}
+
+/// Per-user diagnostics and tracking for nickname decoration
+model DivisionMembership {
+  id                       Int       @id @default(autoincrement())
+  userId                   String    @db.VarChar(19)
+  divisionId               Int
+  lastComputedLevel        Int?
+  lastComputedAt           DateTime?
+  lastAppliedNicknameLevel Int?
+  lastNicknameUpdatedAt    DateTime?
+  nicknameSyncStatus       String?
+  notes                    String?
+  division                 Division  @relation(fields: [divisionId], references: [id])
+  user                     User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, divisionId])
+  @@index([userId])
+  @@map("divisionMembership")
+  @@schema("arbiter")
+}
+
+model DiscordRoles {
+  id          Int      @id @default(autoincrement())
+  roleId      String
+  name        String
+  color       String
+  permissions String
+  position    Int
+  hoist       Boolean
+  memberCount Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@schema("arbiter")
 }
 
 model Organization {
-    id                      String                   @id @default(uuid())
-    name                    String
-    slug                    String
-    logo                    String?
-    metadata                String?
-    isRecruiting            Boolean                  @default(false)
-    createdAt               DateTime                 @default(now())
-    Member                  Member[]
-    Invitation              Invitation[]
-    OrganizationRole        OrganizationRole[]
-    recruitmentApplications RecruitmentApplication[]
+  id                      String                   @id @default(uuid())
+  name                    String
+  slug                    String
+  logo                    String?
+  metadata                String?
+  isRecruiting            Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  Member                  Member[]
+  Invitation              Invitation[]
+  OrganizationRole        OrganizationRole[]
+  recruitmentApplications RecruitmentApplication[]
 
-    @@unique([slug])
-    @@map("organization")
-    @@schema("nexus")
+  @@unique([slug])
+  @@map("organization")
+  @@schema("nexus")
 }
 
 model Member {
-    id             String   @id @default(uuid())
-    userId         String
-    organizationId String
-    role           String
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  role           String
+  createdAt      DateTime @default(now())
 
-    user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-    @@map("member")
-    @@schema("nexus")
+  @@map("member")
+  @@schema("nexus")
 }
 
 model Invitation {
-    id             String   @id @default(uuid())
-    email          String
-    inviterId      String
-    organizationId String
-    role           String
-    status         String
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  email          String
+  inviterId      String
+  organizationId String
+  role           String
+  status         String
+  createdAt      DateTime @default(now())
 
-    user         User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-    @@map("invitation")
-    @@schema("nexus")
+  @@map("invitation")
+  @@schema("nexus")
 }
 
 model OrganizationRole {
-    id             String       @id @default(uuid())
-    organizationId String
-    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    role           String
-    permission     String
-    createdAt      DateTime     @default(now())
-    updatedAt      DateTime?    @updatedAt
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           String
+  permission     String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime?    @updatedAt
 
-    @@map("organizationRole")
-    @@schema("nexus")
+  @@map("organizationRole")
+  @@schema("nexus")
 }
 
 model AuditLog {
-    id             String   @id @default(uuid())
-    userId         String? // Nullable for anonymous/failed auth
-    action         String // e.g. "organization.delete"
-    resource       String // e.g. "organization", "role"
-    resourceId     String?
-    organizationId String?
-    status         String // "success", "error", "denied"
-    errorMessage   String?
-    changes        String? // JSON string representing the changes (Before/After)
-    ipAddress      String?
-    userAgent      String?
-    metadata       String? // Additional metadata as JSON string
-    createdAt      DateTime @default(now())
+  id             String   @id @default(uuid())
+  userId         String? // Nullable for anonymous/failed auth
+  action         String // e.g. "organization.delete"
+  resource       String // e.g. "organization", "role"
+  resourceId     String?
+  organizationId String?
+  status         String // "success", "error", "denied"
+  errorMessage   String?
+  changes        String? // JSON string representing the changes (Before/After)
+  ipAddress      String?
+  userAgent      String?
+  metadata       String? // Additional metadata as JSON string
+  createdAt      DateTime @default(now())
 
-    user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-    @@index([userId])
-    @@index([organizationId])
-    @@index([action])
-    @@index([createdAt])
-    @@map("audit_log")
-    @@schema("nexus")
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_log")
+  @@schema("nexus")
 }
 
 model RecruitmentApplication {
-    id                    String    @id @default(uuid())
-    userId                String
-    organizationId        String?
-    rsiHandle             String
-    age                   Int
-    combatExperience      Int
-    logisticsExperience   Int
-    supportExperience     Int
-    starCitizenExperience String?   @db.Text
-    top3ShipsWhy          String    @db.Text
-    whenStartPlayingSC    String    @db.Text
-    whyJoin               String    @db.Text
-    canCommitToDiscord    Boolean   @default(false)
-    status                String    @default("pending") // pending, accepted, rejected
-    appliedAt             DateTime  @default(now())
-    reviewedAt            DateTime?
-    reviewedBy            String?
+  id                    String    @id @default(uuid())
+  userId                String
+  organizationId        String?
+  rsiHandle             String
+  age                   Int
+  combatExperience      Int
+  logisticsExperience   Int
+  supportExperience     Int
+  starCitizenExperience String?   @db.Text
+  top3ShipsWhy          String    @db.Text
+  whenStartPlayingSC    String    @db.Text
+  whyJoin               String    @db.Text
+  canCommitToDiscord    Boolean   @default(false)
+  status                String    @default("pending") // pending, accepted, rejected
+  appliedAt             DateTime  @default(now())
+  reviewedAt            DateTime?
+  reviewedBy            String?
 
-    user         User          @relation("ApplicantUser", fields: [userId], references: [id], onDelete: Cascade)
-    organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-    reviewer     User?         @relation("ReviewerUser", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  user         User          @relation("ApplicantUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  reviewer     User?         @relation("ReviewerUser", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
-    @@index([status, appliedAt])
-    @@map("recruitment_application")
-    @@schema("nexus")
+  @@index([status, appliedAt])
+  @@map("recruitment_application")
+  @@schema("nexus")
 }
 
 model DiscordNotificationQueue {
-    id              String    @id @default(uuid())
-    eventType       String // e.g. "application_submitted", "application_reviewed"
-    resourceId      String // e.g. RecruitmentApplication.id
-    recipientUserId String // Discord ID of the recipient
-    status          String    @default("pending") // pending, sent, failed
-    attemptCount    Int       @default(0)
-    lastAttemptAt   DateTime?
-    sentAt          DateTime?
-    errorMessage    String?
-    payload         String? // JSON with notification data
-    createdAt       DateTime  @default(now())
+  id              String    @id @default(uuid())
+  eventType       String // e.g. "application_submitted", "application_reviewed"
+  resourceId      String // e.g. RecruitmentApplication.id
+  recipientUserId String // Discord ID of the recipient
+  status          String    @default("pending") // pending, sent, failed
+  attemptCount    Int       @default(0)
+  lastAttemptAt   DateTime?
+  sentAt          DateTime?
+  errorMessage    String?
+  payload         String? // JSON with notification data
+  createdAt       DateTime  @default(now())
 
-    @@index([status, createdAt])
-    @@map("discord_notification_queue")
-    @@schema("nexus")
+  @@index([status, createdAt])
+  @@map("discord_notification_queue")
+  @@schema("nexus")
 }
+
