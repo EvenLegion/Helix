@@ -1,6 +1,5 @@
 import { CommandData, ChatInputCommandContext } from "commandkit";
-import { MessageFlags, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
-import { ensureGuild, replyGuildRequired } from "../../utils/interactions";
+import { MessageFlags, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle} from "discord.js";
 
 export const command: CommandData = {
     name: 'name-change-request',
@@ -8,7 +7,9 @@ export const command: CommandData = {
 }
 
 export async function chatInput({ interaction }: ChatInputCommandContext) {
-    try { ensureGuild(interaction); } catch { return replyGuildRequired(interaction); }
+    if (!interaction.guild) {
+        return interaction.reply({ content: 'This command can only be used in a server.', flags: MessageFlags.Ephemeral });
+    }
 
     const modal = new ModalBuilder()
         .setCustomId('name-change-request')

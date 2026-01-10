@@ -1,9 +1,6 @@
 import type { CommandData, ChatInputCommandContext } from "commandkit";
 import { MessageFlags } from "discord.js";
 import { prisma } from "@workspace/db";
-import { forInteraction } from "@workspace/logger";
-import { CONFIG } from "../../config";
-import { ensureGuild, replyGuildRequired } from "../../utils/interactions";
 
 export const command: CommandData = {
     name: 'import-users',
@@ -11,20 +8,25 @@ export const command: CommandData = {
 }
 
 export async function chatInput({ interaction }: ChatInputCommandContext) {
-    const log = forInteraction(interaction).child({ mod: 'dev', cmd: 'import-users' });
-    try { ensureGuild(interaction); } catch { return replyGuildRequired(interaction); }
-    const guild = interaction.guild!;
+    const guild = interaction.guild;
 
-    // Configure via env: defaults to everyone in dev, else specific role
-    const ROLE_ID = process.env.IMPORT_USERS_ROLE_ID ?? CONFIG.STAFF_ROLE_ID;
+    if (!guild) {
+        return interaction.reply({
+            content: 'This command can only be used in a server.',
+            flags: MessageFlags.Ephemeral,
+        });
+    }
+
+    const ROLE_ID = '1352350908385853541'; // Legionnaire
+    //const ROLE_ID = '1378564784370225252'; // @everyone for dev
 
     await guild.members.fetch();
 
     const filteredMembers = guild.members.cache
         .filter(member => member.roles.cache.has(ROLE_ID))
         .map(member => ({
-            userId: member.user.id,
-            guildId: member.guild.id,
+            user_id: member.user.id,
+            guild_id: member.guild.id,
             username: member.user.username,
             nickname: member.nickname || null,
             roles: member.roles.cache,
@@ -40,14 +42,14 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 
             await prisma.user.upsert({
                 where: {
-                    id: member.userId,
+                    id: member.user_id,
                 },
                 update: {
                     username: member.username,
                     nickname: member.nickname || ' ',
                 },
                 create: {
-                    id: member.userId,
+                    id: member.user_id,
                     username: member.username,
                     nickname: member.nickname || ' ',
                     email: ' ',
@@ -59,9 +61,13 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
             })
         }
 
-        await interaction.editReply({ content: "User database has been updated with the latest information." });
+        await interaction.editReply({
+            content: "User database has been updated with the latest information.",
+        });
     } catch (error) {
-        log.error({ err: error }, 'Error updating user database');
-        await interaction.editReply({ content: "There was an error updating the user database." });
+        console.log(`Error updating user database: ${error}`);
+        await interaction.editReply({
+            content: `There was an error updating the user database: ${error}`,
+        });
     }
 }

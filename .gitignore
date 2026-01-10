@@ -64,6 +64,13 @@ apps/nexus/env-development
 # JetBrains
 .idea
 TODO.txt
+.github/copilot-instructions.md
+/apps/nexus/.claude/settings.local.json
+/apps/nexus/nul
+/.claude/
+.claude/settings.local.json
+CLAUDE.md
+AGENTS.md
 
 # TurboRepo
 my-turborepo/
