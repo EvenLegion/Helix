@@ -144,6 +144,7 @@ model Organization {
     slug                    String
     logo                    String?
     metadata                String?
+    isRecruiting            Boolean                  @default(false)
     createdAt               DateTime                 @default(now())
     Member                  Member[]
     Invitation              Invitation[]

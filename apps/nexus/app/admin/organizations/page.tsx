@@ -5,8 +5,7 @@ import { ManageRoleDialog } from '@/components/admin/manage-role';
 import { AddUserDialog } from '@/components/admin/add-user-dialog';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@workspace/ui/components/card';
 import { FilteredMembersTable } from '@/components/admin/filtered-members-table';
-import ActiveOrg from '@/components/admin/active-org';
-import { RemoveOrganizationDialog } from "@/components/admin/remove-organization-dialog";
+import { OrganizationManagementPanel } from '@/components/admin/organization-management-panel';
 import { MemberDAL } from '@/dal/members';
 import { RoleDAL } from '@/dal/roles';
 import { checkPermissionsOrAdmin } from '@/server/permissions';
@@ -14,7 +13,7 @@ import { checkPermissionsOrAdmin } from '@/server/permissions';
 export default async function Organizations() {
     // Check if user is admin or has permission to view organizations
     const canViewOrganizations = await checkPermissionsOrAdmin({
-        member: ['read']
+        member: ['read'],
     });
 
     if (!canViewOrganizations) {
@@ -36,56 +35,36 @@ export default async function Organizations() {
     const organizations = userOrgs?.Member?.map((member) => member.organization) || [];
 
     // Fetch all members for these organizations
-    const allMembers = await MemberDAL.findByOrganizationIds(
-        organizations.map((org) => org.id)
-    );
+    const allMembers = await MemberDAL.findByOrganizationIds(organizations.map((org) => org.id));
 
     // Filter out orphaned members (where user doesn't exist)
     const members = allMembers.filter((member) => member.user !== null);
 
-    const roles = await RoleDAL.findByOrganizationIds(
-        organizations.map((org) => org.id)
-    );
+    const roles = await RoleDAL.findByOrganizationIds(organizations.map((org) => org.id));
 
     // Check permissions using the helper function
     // Site admins bypass organization-level permissions
     const canCreateRoles = await checkPermissionsOrAdmin({
-        ac: ['create']
+        ac: ['create'],
     });
 
     const canUpdateRoles = await checkPermissionsOrAdmin({
-        ac: ['update']
+        ac: ['update'],
     });
 
     const canAddMembers = await checkPermissionsOrAdmin({
-        member: ['create']
+        member: ['create'],
     });
 
-    const canCreateOrganizations = await checkPermissionsOrAdmin({
-        organization: ['create']
+    const isOwner = await checkPermissionsOrAdmin({
+        organization: ['owner'],
     });
-
-    const canDeleteOrganizations = await checkPermissionsOrAdmin({
-        organization: ['delete']
-    });
-
 
     return (
         <>
             <div className="min-h-svh p-4">
-                <Card className="w-full max-w-sm">
-                    <CardHeader>
-                        <CardTitle>Active Organization</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ActiveOrg organizations={organizations} />
-                    </CardContent>
-                    <CardFooter>
-                        {canCreateOrganizations && <CreateOrganizationDialog />}
-                        {organizations.length > 1 && canDeleteOrganizations && <RemoveOrganizationDialog organizations={organizations} />}
-                    </CardFooter>
-                </Card>
-                <div className="flex gap-2 mt-8 ml-4">
+                {isOwner && <OrganizationManagementPanel />}
+                <div className="flex gap-2 mt-2 ml-4">
                     {canCreateRoles && <CreateNewRoleDialog />}
                     {canUpdateRoles && <ManageRoleDialog roles={roles} />}
                     {canAddMembers && <AddUserDialog roles={roles} />}
@@ -97,4 +76,3 @@ export default async function Organizations() {
         </>
     );
 }
-

@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Dialog,
     DialogContent,
@@ -24,15 +24,11 @@ export function CreateOrganizationDialog() {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button className="p-2" />}>
-                Create New Organization
-            </DialogTrigger>
+            <DialogTrigger render={<Button className="m-1" />}>Create New Organization</DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Create New Organization</DialogTitle>
-                    <DialogDescription>
-                        Create a new organization to manage your projects and teams.
-                    </DialogDescription>
+                    <DialogDescription>Create a new organization to manage your projects and teams.</DialogDescription>
                 </DialogHeader>
                 <CreateOrganizationForm onSuccess={handleSuccess} />
             </DialogContent>

@@ -14,6 +14,7 @@ export class RecruitmentApplicationDAL {
      */
     static async create(data: {
         userId: string;
+        organizationId: string;
         rsiHandle: string;
         age: number;
         combatExperience: number;
@@ -29,6 +30,7 @@ export class RecruitmentApplicationDAL {
             data,
             include: {
                 user: true,
+                organization: true,
             },
         });
     }
@@ -44,6 +46,7 @@ export class RecruitmentApplicationDAL {
             orderBy: { appliedAt: 'desc' },
             include: {
                 user: true,
+                organization: true,
             },
         });
     }
@@ -62,6 +65,7 @@ export class RecruitmentApplicationDAL {
             },
             include: {
                 user: true,
+                organization: true,
             },
         });
     }
@@ -76,6 +80,7 @@ export class RecruitmentApplicationDAL {
             where: { id },
             include: {
                 user: true,
+                organization: true,
             },
         });
     }
@@ -103,6 +108,7 @@ export class RecruitmentApplicationDAL {
             orderBy: { appliedAt: 'desc' },
             include: {
                 user: true,
+                organization: true,
             },
         });
     }
@@ -232,7 +238,8 @@ export class RecruitmentApplicationDAL {
                         username: true,
                         email: true,
                     }
-                }
+                },
+                organization: true,
             },
             orderBy: { appliedAt: 'desc' },
         });

@@ -6,9 +6,9 @@ import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import * as z from 'zod';
 import { cn } from '@workspace/ui/lib/utils';
+import { getRecruitingOrganizations } from '@/server/organizations';
 
 import { useState } from 'react';
-0;
 import { useRouter } from 'next/navigation';
 import { submitRecruitmentApplication, checkPendingApplication } from '@/server/recruitment';
 import { Field, FieldLabel, FieldGroup, FieldDescription, FieldError } from '@workspace/ui/components/field';
@@ -21,14 +21,15 @@ import { Checkbox } from '@workspace/ui/components/checkbox';
 import { Switch } from '@workspace/ui/components/switch';
 import { Check } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select';
 
 // TODO: Add reason why false for Can Commit to VC
-// TODO: Just throwing this here because i want to look into DMing user for accepted or rejected
 // TODO: Same as above but for looking into when a user signs in it asks them to join the discord if they are not already there.
 // TODO: Also change the login process potentially to a sign in page with disclaimers
 // TODO: Need to adjust unique constraint to allow multiple rejects but only one rejected at a time and if users has accepted then no new apps.
 
 const ApplicationFormSchema = z.object({
+    organizationId: z.string().min(1, { message: 'Please select an organization to apply to' }),
     rsiHandle: z
         .string()
         .min(5, { message: 'RSI Handle must be at least 5 characters long' })
@@ -60,10 +61,18 @@ export function ApplicationForm({ session }: { session: any }) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [isCheckingPending, setIsCheckingPending] = useState(true);
+    const [recruitingOrgs, setRecruitingOrgs] = React.useState<
+        Array<{
+            id: string;
+            name: string;
+        }>
+    >([]);
+    const [isLoadingOrgs, setIsLoadingOrgs] = React.useState(true);
 
     const form = useForm<z.infer<typeof ApplicationFormSchema>>({
         resolver: zodResolver(ApplicationFormSchema),
         defaultValues: {
+            organizationId: '',
             rsiHandle: '',
             age: undefined,
             combatExperience: 1,
@@ -84,6 +93,7 @@ export function ApplicationForm({ session }: { session: any }) {
 
             // Submit to database via server function
             const result = await submitRecruitmentApplication({
+                organizationId: data.organizationId,
                 rsiHandle: data.rsiHandle,
                 age: data.age,
                 combatExperience: data.combatExperience,
@@ -133,11 +143,35 @@ export function ApplicationForm({ session }: { session: any }) {
         checkPending();
     }, [router]);
 
-    if (isCheckingPending) {
+    React.useEffect(() => {
+        async function loadRecruitingOrgs() {
+            try {
+                const result = await getRecruitingOrganizations();
+                if (result.success && result.organizations) {
+                    setRecruitingOrgs(result.organizations);
+                } else {
+                    toast.error('Failed to load recruiting organizations. Refresh the page to try again.', {
+                        position: 'bottom-right',
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading recruiting organizations:', error);
+                toast.error('Failed to load orgnaiszations. Refresh the page to try again.', {
+                    position: 'bottom-right',
+                });
+            } finally {
+                setIsLoadingOrgs(false);
+            }
+        }
+
+        loadRecruitingOrgs();
+    }, []);
+
+    if (isCheckingPending || isLoadingOrgs) {
         // TODO: Make look nicer
         // TODO: Need to prevent recruitment pages from being shown if they are a member of an org.
         // TODO: Need to add a status or communication inside of Nexus(Maybe an enhancement)
-        return <div>Checking for existing application...</div>;
+        return <div>Loading...</div>;
     }
 
     return (
@@ -147,6 +181,49 @@ export function ApplicationForm({ session }: { session: any }) {
                     <form id="application-form" onSubmit={form.handleSubmit(onSubmit)}>
                         <h2 className="mb-4 text-xl font-bold">Recruitment Application</h2>
                         <h3 className="mb-4 text-lg font-medium">Personal Information</h3>
+                        <div className="mb-6">
+                            <h3 className="mb-2 font-medium">Select Organization to Apply To</h3>
+                            <FieldGroup>
+                                <Controller
+                                    name="organizationId"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor="organizationId">Select Organization *</FieldLabel>
+                                            <Select
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                                disabled={recruitingOrgs.length === 0}
+                                            >
+                                                <SelectTrigger id="organizationId" aria-invalid={fieldState.invalid}>
+                                                    <SelectValue>
+                                                        {recruitingOrgs.find((org) => org.id === field.value)?.name ||
+                                                            'Select an organization'}
+                                                    </SelectValue>
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {recruitingOrgs.map((org) => (
+                                                        <SelectItem key={org.id} value={org.id}>
+                                                            {org.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FieldDescription>
+                                                Select the organization you wish to apply to.
+                                            </FieldDescription>
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                            {recruitingOrgs.length === 0 && !isLoadingOrgs && (
+                                                <p className="text-sm text-destructive mt-1">
+                                                    No organizations are currently recruiting. Please check back later.
+                                                </p>
+                                            )}
+                                        </Field>
+                                    )}
+                                />
+                            </FieldGroup>
+                        </div>
+                        <Separator className="my-4" />
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <FieldGroup>
                                 <Controller

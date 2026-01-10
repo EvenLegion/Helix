@@ -1,7 +1,7 @@
-"use client"
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Dialog,
     DialogContent,
@@ -11,18 +11,8 @@ import {
     DialogTrigger,
 } from '@workspace/ui/components/dialog';
 import { Button } from '@workspace/ui/components/button';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@workspace/ui/components/select";
-import {
-    Field,
-    FieldLabel,
-    FieldDescription,
-} from '@workspace/ui/components/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select';
+import { Field, FieldLabel, FieldDescription } from '@workspace/ui/components/field';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
@@ -35,12 +25,12 @@ interface RemoveOrganizationDialogProps {
 
 export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDialogProps) {
     const [open, setOpen] = useState(false);
-    const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
     const { data: activeOrg } = authClient.useActiveOrganization();
 
-    const selectedOrg = organizations.find(org => org.id === selectedOrgId);
+    const selectedOrg = organizations.find((org) => org.id === selectedOrgId);
 
     const handleDelete = async () => {
         if (!selectedOrgId) {
@@ -55,8 +45,8 @@ export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDi
 
             // If we deleted the active organization, switch to another one or clear it
             if (activeOrg?.id === selectedOrgId) {
-                const remainingOrgs = organizations.filter(org => org.id !== selectedOrgId);
-                if (remainingOrgs.length > 0) {
+                const remainingOrgs = organizations.filter((org) => org.id !== selectedOrgId);
+                if (remainingOrgs[0]) {
                     await authClient.organization.setActive({
                         organizationId: remainingOrgs[0].id,
                     });
@@ -71,7 +61,7 @@ export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDi
             }
 
             setOpen(false);
-            setSelectedOrgId("");
+            setSelectedOrgId('');
             router.refresh();
         } catch (error) {
             console.error('Failed to delete organization:', error);
@@ -83,27 +73,21 @@ export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDi
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button variant="destructive" className="m-1 p-2" />}>
-                Remove Organization
-            </DialogTrigger>
+            <DialogTrigger render={<Button variant="destructive" className="m-1" />}>Remove Organization</DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Remove Organization</DialogTitle>
                     <DialogDescription>
-                        Select an organization to delete. This action cannot be undone and will remove all members, roles, and invitations associated with it.
+                        Select an organization to delete. This action cannot be undone and will remove all members,
+                        roles, and invitations associated with it.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-4">
                     <Field>
                         <FieldLabel>Select Organization</FieldLabel>
-                        <Select
-                            value={selectedOrgId}
-                            onValueChange={(value) => setSelectedOrgId(value || "")}
-                        >
+                        <Select value={selectedOrgId} onValueChange={(value) => setSelectedOrgId(value || '')}>
                             <SelectTrigger className="w-full">
-                                <SelectValue>
-                                    {selectedOrg?.name || "Select an organization to remove"}
-                                </SelectValue>
+                                <SelectValue>{selectedOrg?.name || 'Select an organization to remove'}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {organizations.map((org) => (
@@ -135,17 +119,13 @@ export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDi
                             variant="outline"
                             onClick={() => {
                                 setOpen(false);
-                                setSelectedOrgId("");
+                                setSelectedOrgId('');
                             }}
                             disabled={isLoading}
                         >
                             Cancel
                         </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={!selectedOrgId || isLoading}
-                        >
+                        <Button variant="destructive" onClick={handleDelete} disabled={!selectedOrgId || isLoading}>
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -159,5 +139,5 @@ export function RemoveOrganizationDialog({ organizations }: RemoveOrganizationDi
                 </div>
             </DialogContent>
         </Dialog>
-    )
+    );
 }

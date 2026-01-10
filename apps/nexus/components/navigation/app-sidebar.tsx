@@ -32,7 +32,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { data: activeOrg } = authClient.useActiveOrganization();
     const [mounted, setMounted] = React.useState(false);
 
-    const hasActiveOrg = !!activeOrg;
+    const activeOrgId = activeOrg?.id ?? null;
+    const hasActiveOrg = !!activeOrgId;
+    const userId = session?.user?.id ?? null;
+    const userRole = session?.user?.role ?? null;
 
     // State for filtered menu items
     const [filteredNavMain, setFilteredNavMain] = React.useState<typeof data.navMain>([]);
@@ -48,13 +51,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // Permission checking function using server action
     const hasPermission = React.useCallback(
         async (permissions: Record<string, string[]>): Promise<boolean> => {
-            if (!session?.user) {
+            if (!userId) {
                 return false;
             }
 
             return checkPermissions(permissions);
         },
-        [session?.user],
+        [userId],
     );
 
     // Filter menu items based on conditions (including permissions)
@@ -65,7 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 const context = {
                     hasActiveOrg,
                     hasPermission,
-                    userRole: session?.user?.role,
+                    userRole,
                 };
 
                 const [main, authenticated, admin] = await Promise.all([
@@ -91,7 +94,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         // Always filter items - the filter logic handles authentication state
         // Items with condition: ({ hasActiveOrg }) => !hasActiveOrg will show when not authenticated
         filterItems();
-    }, [hasActiveOrg, hasPermission, session?.user]);
+    }, [activeOrgId, hasActiveOrg, hasPermission, userId, userRole]);
 
     const onSignIn = async () => {
         await authClient.signIn.social({

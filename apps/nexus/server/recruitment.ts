@@ -7,6 +7,7 @@ import { logSuccess, logDenied, logError } from './audit';
 import { checkPermissions } from './permissions';
 import { MemberDAL } from '@/dal/members';
 import { DiscordNotificationDAL } from '@/dal/discord-notifications';
+import { OrganizationDAL } from '@/dal/organizations';
 
 /**
  * Submit a recruitment application
@@ -21,6 +22,7 @@ import { DiscordNotificationDAL } from '@/dal/discord-notifications';
  * @throws Error if unauthorized or duplicate application
  */
 export async function submitRecruitmentApplication(data: {
+    organizationId: string;
     rsiHandle: string;
     age: number;
     combatExperience: number;
@@ -42,6 +44,22 @@ export async function submitRecruitmentApplication(data: {
             errorMessage: 'User not authenticated',
         });
         throw new Error('User not authenticated');
+    }
+
+    // Validate if organization is recruiting
+    const isRecruiting = await OrganizationDAL.isRecruiting(data.organizationId);
+
+    if (!isRecruiting) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'recruitment.submit',
+            resource: 'recruitment_application',
+            errorMessage: 'Organization is not recruiting',
+            metadata: {
+                organizationId: data.organizationId,
+            },
+        });
+        throw new Error('The selected organization is not currently recruiting.');
     }
 
     // Check for existing pending application
@@ -66,6 +84,7 @@ export async function submitRecruitmentApplication(data: {
     try {
         const application = await RecruitmentApplicationDAL.create({
             userId: currentUser.id,
+            organizationId: data.organizationId,
             rsiHandle: data.rsiHandle,
             age: data.age,
             combatExperience: data.combatExperience,
@@ -85,6 +104,7 @@ export async function submitRecruitmentApplication(data: {
             resource: 'recruitment_application',
             resourceId: application.id,
             metadata: {
+                organizationId: data.organizationId,
                 rsiHandle: data.rsiHandle,
                 age: data.age,
                 combatExperience: data.combatExperience,

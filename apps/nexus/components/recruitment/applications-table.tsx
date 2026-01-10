@@ -23,6 +23,7 @@ import { Input } from '@workspace/ui/components/input';
 export type Application = {
     id: string;
     userId: string;
+    organizationId: string | null;
     rsiHandle: string;
     age: number;
     combatExperience: number;
@@ -41,6 +42,11 @@ export type Application = {
         username?: string | null;
         email?: string | null;
     };
+    organization: {
+        id: string;
+        name: string;
+        slug: string;
+    } | null;
 };
 
 function getColumns(permissions: {
@@ -67,6 +73,11 @@ function getColumns(permissions: {
             accessorKey: 'user.username',
             header: 'Username',
             cell: ({ row }) => row.original.user.username || 'N/A',
+        },
+        {
+            accessorKey: 'organization.name',
+            header: 'Organization',
+            cell: ({ row }) => row.original.organization?.name || 'N/A',
         },
         {
             accessorKey: 'status',

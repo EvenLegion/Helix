@@ -1,25 +1,25 @@
-"use server"
+'use server';
 
-import { prisma } from "@workspace/db";
-import { getCurrentUser } from "./users";
-import { OrganizationDAL } from "@/dal/organizations";
-import { MemberDAL } from "@/dal/members";
-import { RoleDAL } from "@/dal/roles";
-import { UserDAL } from "@/dal/users";
-import { checkPermissions } from "./permissions";
-import { logSuccess, logDenied } from "./audit";
+import { prisma } from '@workspace/db';
+import { getCurrentUser } from './users';
+import { OrganizationDAL } from '@/dal/organizations';
+import { MemberDAL } from '@/dal/members';
+import { RoleDAL } from '@/dal/roles';
+import { UserDAL } from '@/dal/users';
+import { checkPermissions } from './permissions';
+import { logSuccess, logDenied } from './audit';
 
 export async function getOrganizations() {
     const { currentUser } = await getCurrentUser();
 
-    return (currentUser)
+    return currentUser;
 }
 
 export async function getAllOrganizations() {
     const { currentUser } = await getCurrentUser();
 
     // TODO: Modify Permissions
-    const hasPermission = await checkPermissions({ admin: ['admin_dashboard']});
+    const hasPermission = await checkPermissions({ admin: ['admin_dashboard'] });
 
     if (!hasPermission) {
         await logDenied({
@@ -63,7 +63,7 @@ export async function getActiveOrganization(userId: string) {
 
     const isSelf = currentUser?.id === userId;
     // TODO: Modify Permissions
-    const isAdmin = !isSelf && await checkPermissions({ admin: ['admin_dashboard']});
+    const isAdmin = !isSelf && (await checkPermissions({ admin: ['admin_dashboard'] }));
 
     if (!isSelf && !isAdmin) {
         await logDenied({
@@ -96,7 +96,7 @@ export async function getActiveOrganization(userId: string) {
         resource: 'organization',
         resourceId: organization?.id,
         organizationId: organization?.id,
-        metadata: { requestedUserId: userId},
+        metadata: { requestedUserId: userId },
     });
 
     return organization;
@@ -105,7 +105,7 @@ export async function getActiveOrganization(userId: string) {
 export async function updateOrganizationRole(
     roleId: string,
     organizationId: string,
-    permission: Record<string, string[]>
+    permission: Record<string, string[]>,
 ) {
     const { currentUser } = await getCurrentUser();
 
@@ -136,14 +136,14 @@ export async function updateOrganizationRole(
     }
 
     //Check permissions
-    const hasPermission = await checkPermissions({ ac: ['update']});
+    const hasPermission = await checkPermissions({ ac: ['update'] });
     if (!hasPermission) {
-        const member = await MemberDAL.findByUserIdAndOrganizationId(
-            currentUser.id,
-            organizationId
-        );
+        const member = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
-        const isOwner = member?.role.split(',').map(r => r.trim()).includes('owner');
+        const isOwner = member?.role
+            .split(',')
+            .map((r) => r.trim())
+            .includes('owner');
 
         if (!isOwner) {
             await logDenied({
@@ -193,10 +193,7 @@ export async function deleteOrganization(organizationId: string) {
     }
 
     // Verify user is a member of this organization
-    const member = await MemberDAL.findByUserIdAndOrganizationId(
-        currentUser.id,
-        organizationId
-    );
+    const member = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
     if (!member) {
         await logDenied({
@@ -211,7 +208,7 @@ export async function deleteOrganization(organizationId: string) {
     }
 
     // CHECK: Only owners can delete the organization
-    const memberRoles = member.role.split(',').map(r => r.trim());
+    const memberRoles = member.role.split(',').map((r) => r.trim());
     const isOwner = memberRoles.includes('owner');
 
     if (!isOwner) {
@@ -242,10 +239,7 @@ export async function deleteOrganization(organizationId: string) {
     return { success: true };
 }
 
-export async function deleteOrganizationRole(
-    roleId: string,
-    organizationId: string
-) {
+export async function deleteOrganizationRole(roleId: string, organizationId: string) {
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
@@ -274,15 +268,15 @@ export async function deleteOrganizationRole(
     }
 
     //Check permissions ac:delete or owner
-    const hasPermission = await checkPermissions({ ac: ['delete']});
+    const hasPermission = await checkPermissions({ ac: ['delete'] });
 
     if (!hasPermission) {
-        const member = await MemberDAL.findByUserIdAndOrganizationId(
-            currentUser.id,
-            organizationId
-        );
+        const member = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
-        const isOwner = member?.role.split(',').map(r => r.trim()).includes('owner');
+        const isOwner = member?.role
+            .split(',')
+            .map((r) => r.trim())
+            .includes('owner');
 
         if (!isOwner) {
             await logDenied({
@@ -299,13 +293,10 @@ export async function deleteOrganizationRole(
     }
 
     // Check if any members use this role
-    const membersUsingRole = await MemberDAL.findByOrganizationIdWithRole(
-        organizationId,
-        existingRole.role
-    );
+    const membersUsingRole = await MemberDAL.findByOrganizationIdWithRole(organizationId, existingRole.role);
 
-    const membersWithRole = membersUsingRole.filter(member => {
-        const memberRoles = member.role.split(',').map(r => r.trim());
+    const membersWithRole = membersUsingRole.filter((member) => {
+        const memberRoles = member.role.split(',').map((r) => r.trim());
         return memberRoles.includes(existingRole.role);
     });
 
@@ -320,10 +311,10 @@ export async function deleteOrganizationRole(
             metadata: {
                 roleName: existingRole.role,
                 memberCount: membersWithRole.length,
-            }
+            },
         });
         throw new Error(
-            `Cannot delete role "${existingRole.role}" as it is assigned to ${membersWithRole.length} members`
+            `Cannot delete role "${existingRole.role}" as it is assigned to ${membersWithRole.length} members`,
         );
     }
 
@@ -384,11 +375,7 @@ export async function searchUsers(query: string) {
 /**
  * Add a user to an organization
  */
-export async function addUserToOrganization(
-    userId: string,
-    organizationId: string,
-    role: string
-) {
+export async function addUserToOrganization(userId: string, organizationId: string, role: string) {
     const { currentUser } = await getCurrentUser();
 
     if (!currentUser) {
@@ -401,10 +388,7 @@ export async function addUserToOrganization(
         throw new Error('Unauthorized');
     }
 
-    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
-        currentUser.id,
-        organizationId
-    );
+    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
     if (!currentUserMember) {
         await logDenied({
@@ -445,10 +429,7 @@ export async function addUserToOrganization(
         throw new Error('User not found');
     }
 
-    const existingMember = await MemberDAL.findByUserIdAndOrganizationId(
-        userId,
-        organizationId
-    );
+    const existingMember = await MemberDAL.findByUserIdAndOrganizationId(userId, organizationId);
 
     if (existingMember) {
         await logDenied({
@@ -527,10 +508,7 @@ export async function deleteMemberFromOrganization(memberId: string) {
 
     const organizationId = memberToRemove.organizationId;
 
-    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(
-        currentUser.id,
-        organizationId
-    );
+    const currentUserMember = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
     if (!currentUserMember) {
         await logDenied({
@@ -607,10 +585,7 @@ export async function deleteMemberFromOrganization(memberId: string) {
  * Bypasses better-auth's self-modification restriction
  * SECURITY: Only owners can use this, and owner role cannot be removed
  */
-export async function updateSelfMemberRole(
-    organizationId: string,
-    roles: string[]
-) {
+export async function updateSelfMemberRole(organizationId: string, roles: string[]) {
     // 1. Get current user
     const { currentUser } = await getCurrentUser();
     if (!currentUser) {
@@ -618,17 +593,14 @@ export async function updateSelfMemberRole(
     }
 
     // 2. Find the member record for the current user
-    const member = await MemberDAL.findByUserIdAndOrganizationId(
-        currentUser.id,
-        organizationId
-    );
+    const member = await MemberDAL.findByUserIdAndOrganizationId(currentUser.id, organizationId);
 
     if (!member) {
         throw new Error('You are not a member of this organization');
     }
 
     // 3. CRITICAL VALIDATION: Check if user is currently an owner
-    const currentRoles = member.role.split(',').map(r => r.trim());
+    const currentRoles = member.role.split(',').map((r) => r.trim());
     const isOwner = currentRoles.includes('owner');
 
     if (!isOwner) {
@@ -642,12 +614,9 @@ export async function updateSelfMemberRole(
 
     // 5. Validate all requested roles exist in the organization
     const validationPromises = roles
-        .filter(role => role !== 'owner') // owner is a special role
+        .filter((role) => role !== 'owner') // owner is a special role
         .map(async (role) => {
-            const orgRole = await RoleDAL.findByRoleNameAndOrganizationId(
-                role,
-                organizationId
-            );
+            const orgRole = await RoleDAL.findByRoleNameAndOrganizationId(role, organizationId);
             if (!orgRole) {
                 throw new Error(`Role "${role}" does not exist in this organization`);
             }
@@ -656,11 +625,104 @@ export async function updateSelfMemberRole(
     await Promise.all(validationPromises);
 
     // 6. Update the member record directly via Prisma (bypass better-auth)
-    const updatedMember = await MemberDAL.updateRoles(
-        member.id,
-        roles.join(', ')
-    );
+    const updatedMember = await MemberDAL.updateRoles(member.id, roles.join(', '));
 
     return updatedMember;
 }
 
+/**
+ * Get all organizations that are recruiting
+ * Public endopoint - no auth required
+ */
+export async function getRecruitingOrganizations() {
+    try {
+        const organizations = await OrganizationDAL.findRecruiting();
+
+        return {
+            success: true,
+            organizations,
+        };
+    } catch (error) {
+        console.error('Error fetching recruiting organizations:', error);
+        return {
+            success: false,
+            organizations: [],
+            error: 'Failed to fetch recruiting organizations',
+        };
+    }
+}
+
+export async function updateOrganization(data: {
+    organizationId: string;
+    name: string;
+    slug: string;
+    isRecruiting: boolean;
+}) {
+    const { currentUser } = await getCurrentUser();
+
+    if (!currentUser) {
+        await logDenied({
+            action: 'organization.update',
+            resource: 'organization',
+            resourceId: data.organizationId,
+            errorMessage: 'User not authenticated',
+        });
+        throw new Error('Not authenticated');
+    }
+
+    const hasPermission = await checkPermissions({
+        organization: ['update'],
+    });
+
+    if (!hasPermission) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'organization.update',
+            resource: 'organization',
+            resourceId: data.organizationId,
+            errorMessage: 'Insufficient permissions to update organization',
+        });
+        throw new Error('Unauthorized: Insufficient permissions to update organization');
+    }
+
+    // Check if slug is unique
+    const existingOrg = await prisma.organization.findUnique({
+        where: { slug: data.slug },
+    });
+
+    if (existingOrg && existingOrg.id !== data.organizationId) {
+        await logDenied({
+            userId: currentUser.id,
+            action: 'organization.update',
+            resource: 'organization',
+            resourceId: data.organizationId,
+            errorMessage: 'Slug already in use',
+        });
+        throw new Error('Slug is already in use by another organization');
+    }
+
+    const updated = await prisma.organization.update({
+        where: { id: data.organizationId },
+        data: {
+            name: data.name,
+            slug: data.slug,
+            isRecruiting: data.isRecruiting,
+        },
+    });
+
+    await logSuccess({
+        userId: currentUser.id,
+        action: 'organization.update',
+        resource: 'organization',
+        resourceId: data.organizationId,
+        changes: {
+            name: updated.name,
+            slug: updated.slug,
+            isRecruiting: updated.isRecruiting,
+        },
+    });
+
+    console.log('[SERVER] Updated organization isRecruiting to:', updated.isRecruiting);
+
+    return { success: true, organization: updated };
+}
