@@ -24,38 +24,46 @@ import { Button } from '@workspace/ui/components/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select';
 
 // TODO: Add reason why false for Can Commit to VC
-// TODO: Same as above but for looking into when a user signs in it asks them to join the discord if they are not already there.
-// TODO: Also change the login process potentially to a sign in page with disclaimers
 // TODO: Need to adjust unique constraint to allow multiple rejects but only one rejected at a time and if users has accepted then no new apps.
 
-const ApplicationFormSchema = z.object({
-    organizationId: z.string().min(1, { message: 'Please select an organization to apply to' }),
-    rsiHandle: z
-        .string()
-        .min(5, { message: 'RSI Handle must be at least 5 characters long' })
-        .max(32, { message: 'RSI Handle must be at most 30 characters long' }),
-    age: z
-        .number({ message: 'Please enter a valid number' })
-        .min(18, { message: 'You must be at least 18 years old to apply' }) // TODO: Do we want this to be shown?
-        .max(120, { message: 'Please enter a valid age' }),
-    combatExperience: z
-        .number()
-        .min(1, { message: 'Please rate your combat experience' })
-        .max(5, { message: 'Please rate your combat experience' }),
-    logisticsExperience: z
-        .number()
-        .min(1, { message: 'Please rate your logistics experience' })
-        .max(5, { message: 'Please rate your logistics experience' }),
-    supportExperience: z
-        .number()
-        .min(1, { message: 'Please rate your support experience' })
-        .max(5, { message: 'Please rate your support experience' }),
-    starCitizenExperience: z.string().min(10, { message: 'Please describe your Star Citizen experience' }),
-    top3ShipsWhy: z.string().min(10, { message: 'Please describe your top 3 ships and why' }),
-    whenDidYouStartPlayingSC: z.string().min(10, { message: 'Please describe when you started playing Star Citizen' }),
-    whyDoYouWantToJoin: z.string().min(10, { message: 'Please describe why you want to join our organization' }),
-    canCommitToVC: z.boolean().optional(),
-});
+const ApplicationFormSchema = z
+    .object({
+        organizationId: z.string().min(1, { message: 'Please select an organization to apply to' }),
+        rsiHandle: z
+            .string()
+            .min(5, { message: 'RSI Handle must be at least 5 characters long' })
+            .max(32, { message: 'RSI Handle must be at most 30 characters long' }),
+        age: z.number({ message: 'Please enter a valid number' }),
+        combatExperience: z
+            .number()
+            .min(1, { message: 'Please rate your combat experience' })
+            .max(5, { message: 'Please rate your combat experience' }),
+        logisticsExperience: z
+            .number()
+            .min(1, { message: 'Please rate your logistics experience' })
+            .max(5, { message: 'Please rate your logistics experience' }),
+        supportExperience: z
+            .number()
+            .min(1, { message: 'Please rate your support experience' })
+            .max(5, { message: 'Please rate your support experience' }),
+        starCitizenExperience: z.string().min(10, { message: 'Please describe your Star Citizen experience' }),
+        top3ShipsWhy: z.string().min(10, { message: 'Please describe your top 3 ships and why' }),
+        whenDidYouStartPlayingSC: z
+            .string()
+            .min(10, { message: 'Please describe when you started playing Star Citizen' }),
+        whyDoYouWantToJoin: z.string().min(10, { message: 'Please describe why you want to join our organization' }),
+        canCommitToVC: z.boolean(),
+        cantCommitToVC: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+        if (!data.canCommitToVC && (!data.cantCommitToVC || data.cantCommitToVC.trim() === '')) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['cantCommitToVC'],
+                message: 'Please explain why you cannot commit to using Discord for voice comms',
+            });
+        }
+    });
 
 export function ApplicationForm({ session }: { session: any }) {
     const router = useRouter();
@@ -83,6 +91,7 @@ export function ApplicationForm({ session }: { session: any }) {
             whenDidYouStartPlayingSC: '',
             whyDoYouWantToJoin: '',
             canCommitToVC: false,
+            cantCommitToVC: '',
         },
         mode: 'onBlur',
     });
@@ -452,6 +461,31 @@ export function ApplicationForm({ session }: { session: any }) {
                                                     <Check className="h-4 w-4" />
                                                 </Switch>
                                             </div>
+                                        </Field>
+                                    )}
+                                />
+                            </FieldGroup>
+                        </div>
+                        <div className="mt-4">
+                            <FieldGroup>
+                                <Controller
+                                    name="cantCommitToVC"
+                                    control={form.control}
+                                    render={({ field, fieldState }) => (
+                                        <Field data-invalid={fieldState.invalid}>
+                                            <FieldLabel htmlFor="cantCommitToVC">
+                                                If you cannot commit to using Discord for voice comms, please explain
+                                                why.
+                                            </FieldLabel>
+                                            <Textarea
+                                                {...field}
+                                                id={field.name}
+                                                aria-invalid={fieldState.invalid}
+                                                placeholder="Describe why you cannot commit to using Discord for voice comms"
+                                                rows={4}
+                                                disabled={form.getValues('canCommitToVC')}
+                                            />
+                                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                         </Field>
                                     )}
                                 />

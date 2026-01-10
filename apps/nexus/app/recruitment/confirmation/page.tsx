@@ -3,7 +3,6 @@ import { Button } from '@workspace/ui/components/button';
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
-// TODO: Modify this page to what we actually want.
 // TODO: Prevent access to this page if no pending application exists and in an org.
 export default function RecruitmentConfirmationPage() {
     return (
@@ -30,7 +29,8 @@ export default function RecruitmentConfirmationPage() {
                                         1
                                     </span>
                                     <span className="text-sm">
-                                        Our recruitment team will review your application within 3-5 business days.
+                                        Our recruitment team will review your application soon, typically within 24
+                                        hours.
                                     </span>
                                 </li>
                                 <li className="flex items-start gap-3">
@@ -38,16 +38,7 @@ export default function RecruitmentConfirmationPage() {
                                         2
                                     </span>
                                     <span className="text-sm">
-                                        If selected, you'll receive an email with next steps and an invitation to our
-                                        Discord server.
-                                    </span>
-                                </li>
-                                <li className="flex items-start gap-3">
-                                    <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                        3
-                                    </span>
-                                    <span className="text-sm">
-                                        Complete your application on RSI.com to finalize your membership.
+                                        If selected, you'll receive a Discord notification with next steps.
                                     </span>
                                 </li>
                             </ul>

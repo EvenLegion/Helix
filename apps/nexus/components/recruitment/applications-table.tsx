@@ -47,6 +47,12 @@ export type Application = {
         name: string;
         slug: string;
     } | null;
+    reviewer?: {
+        id: string;
+        nickname: string | null;
+        username: string | null;
+        name: string | null;
+    } | null;
 };
 
 function getColumns(permissions: {

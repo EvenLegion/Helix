@@ -1,38 +1,27 @@
-"use client"
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, Controller } from "react-hook-form"
-import { authClient } from "@/lib/auth-client"
-import { toast } from "sonner"
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { z } from "zod"
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, Controller } from 'react-hook-form';
+import { authClient } from '@/lib/auth-client';
+import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { z } from 'zod';
 
-import { Button } from "@workspace/ui/components/button"
-import {
-    Field,
-    FieldLabel,
-    FieldDescription,
-    FieldError,
-} from "@workspace/ui/components/field"
-import { Input } from "@workspace/ui/components/input"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@workspace/ui/components/select"
-import { Loader2, Search, User as UserIcon } from "lucide-react"
-import { searchUsers, addUserToOrganization } from "@/server/organizations"
-import type { OrganizationRole } from "@workspace/db"
-import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
+import { Button } from '@workspace/ui/components/button';
+import { Field, FieldLabel, FieldDescription, FieldError } from '@workspace/ui/components/field';
+import { Input } from '@workspace/ui/components/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select';
+import { Loader2, Search, User as UserIcon } from 'lucide-react';
+import { searchUsers, addUserToOrganization } from '@/server/organizations';
+import type { OrganizationRole } from '@workspace/db';
+import { Avatar, AvatarFallback, AvatarImage } from '@workspace/ui/components/avatar';
 
 const formSchema = z.object({
-    userQuery: z.string().min(2, "Please enter at least 2 characters to search"),
-    userId: z.string().min(1, "Please select a user"),
-    role: z.string().min(1, "Please select a role"),
-})
+    userQuery: z.string().min(2, 'Please enter at least 2 characters to search'),
+    userId: z.string().min(1, 'Please select a user'),
+    role: z.string().min(1, 'Please select a role'),
+});
 
 interface AddUserFormProps {
     onSuccess?: () => void;
@@ -45,7 +34,7 @@ type User = {
     username: string | null;
     nickname: string | null;
     image: string | null;
-}
+};
 
 export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
     const [isLoading, setIsLoading] = useState(false);
@@ -57,23 +46,23 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            userQuery: "",
-            userId: "",
-            role: "",
+            userQuery: '',
+            userId: '',
+            role: '',
         },
-    })
+    });
 
     // Get active organization
     const { data: activeOrg } = authClient.useActiveOrganization();
 
     // Debounced search
     useEffect(() => {
-        const query = form.watch("userQuery");
+        const query = form.watch('userQuery');
 
         if (!query || query.trim().length < 2) {
             setSearchResults([]);
             setSelectedUser(null);
-            form.setValue("userId", "");
+            form.setValue('userId', '');
             return;
         }
 
@@ -83,8 +72,8 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                 const results = await searchUsers(query);
                 setSearchResults(results);
             } catch (error) {
-                console.error("Error searching users:", error);
-                toast.error("Failed to search users");
+                console.error('Error searching users:', error);
+                toast.error('Failed to search users');
                 setSearchResults([]);
             } finally {
                 setIsSearching(false);
@@ -92,11 +81,11 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
         }, 300);
 
         return () => clearTimeout(timeoutId);
-    }, [form.watch("userQuery")]);
+    }, [form.watch('userQuery')]);
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         if (!activeOrg?.id) {
-            toast.error("No active organization selected");
+            toast.error('No active organization selected');
             return;
         }
 
@@ -104,7 +93,7 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
             setIsLoading(true);
             await addUserToOrganization(values.userId, activeOrg.id, values.role);
 
-            toast.success("User added to organization successfully!");
+            toast.success('User added to organization successfully!');
             form.reset();
             setSelectedUser(null);
             setSearchResults([]);
@@ -112,7 +101,7 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
             onSuccess?.();
         } catch (error) {
             console.error(error);
-            toast.error(error instanceof Error ? error.message : "Failed to add user to organization.");
+            toast.error(error instanceof Error ? error.message : 'Failed to add user to organization.');
         } finally {
             setIsLoading(false);
         }
@@ -120,20 +109,18 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
 
     const handleUserSelect = (user: User) => {
         setSelectedUser(user);
-        form.setValue("userId", user.id);
-        form.setValue("userQuery", user.email || user.username || user.nickname || "");
+        form.setValue('userId', user.id);
+        form.setValue('userQuery', user.email || user.username || user.nickname || '');
     };
 
     // Filter roles by active organization and get available roles (including "owner" if needed)
-    const rolesForActiveOrg = activeOrg?.id
-        ? roles.filter(role => role.organizationId === activeOrg.id)
-        : [];
+    const rolesForActiveOrg = activeOrg?.id ? roles.filter((role) => role.organizationId === activeOrg.id) : [];
 
     const availableRoles = [
-        { value: "owner", label: "Owner" },
-        ...rolesForActiveOrg.map(role => ({
+        { value: 'owner', label: 'Owner' },
+        ...rolesForActiveOrg.map((role) => ({
             value: role.role,
-            label: role.role.charAt(0).toUpperCase() + role.role.slice(1)
+            label: role.role.charAt(0).toUpperCase() + role.role.slice(1),
         })),
     ];
 
@@ -178,10 +165,10 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                                         </Avatar>
                                         <div className="flex-1 min-w-0">
                                             <div className="font-medium truncate">
-                                                {user.nickname || user.username || "Unknown"}
+                                                {user.nickname || user.username || 'Unknown'}
                                             </div>
                                             <div className="text-sm text-muted-foreground truncate">
-                                                {user.email || "No email"}
+                                                {user.email || 'No email'}
                                             </div>
                                         </div>
                                     </button>
@@ -201,10 +188,10 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                         <div className="font-medium truncate">
-                                            {selectedUser.nickname || selectedUser.username || "Unknown"}
+                                            {selectedUser.nickname || selectedUser.username || 'Unknown'}
                                         </div>
                                         <div className="text-sm text-muted-foreground truncate">
-                                            {selectedUser.email || "No email"}
+                                            {selectedUser.email || 'No email'}
                                         </div>
                                     </div>
                                     <Button
@@ -213,7 +200,7 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                                         size="sm"
                                         onClick={() => {
                                             setSelectedUser(null);
-                                            form.setValue("userId", "");
+                                            form.setValue('userId', '');
                                         }}
                                     >
                                         Change
@@ -233,7 +220,11 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                         <FieldLabel htmlFor={field.name}>Role</FieldLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                             <SelectTrigger id={field.name} className="w-full">
-                                <SelectValue placeholder="Select a role" />
+                                <SelectValue>
+                                    {field.value
+                                        ? availableRoles.find((r) => r.value === field.value)?.label
+                                        : 'Select a role'}
+                                </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {availableRoles.map((role) => (
@@ -256,9 +247,9 @@ export function AddUserForm({ onSuccess, roles }: AddUserFormProps) {
                         Adding User...
                     </>
                 ) : (
-                    "Add User to Organization"
+                    'Add User to Organization'
                 )}
             </Button>
         </form>
-    )
+    );
 }

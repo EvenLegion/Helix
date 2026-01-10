@@ -1,11 +1,7 @@
-"use client"
+'use client';
 
-import { EllipsisVertical, CircleUser, LogOut, AlertTriangle, X } from "lucide-react";
-import {
-    Avatar,
-    AvatarFallback,
-    AvatarImage
-} from "@workspace/ui/components/avatar";
+import { EllipsisVertical, CircleUser, LogOut, AlertTriangle, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@workspace/ui/components/avatar';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,30 +9,25 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuTrigger
-} from "@workspace/ui/components/dropdown-menu";
-import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    useSidebar,
-} from "@workspace/ui/components/sidebar";
-import { Button } from "@workspace/ui/components/button";
-import { authClient } from "@/lib/auth-client";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+    DropdownMenuTrigger,
+} from '@workspace/ui/components/dropdown-menu';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@workspace/ui/components/sidebar';
+import { Button } from '@workspace/ui/components/button';
+import { authClient } from '@/lib/auth-client';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 export function NavUser({
     user,
 }: {
     user: {
-        email: string
-        avatar: string
-        username: string
-    }
+        email: string;
+        avatar: string;
+        username: string;
+    };
 }) {
-    const { isMobile } = useSidebar()
+    const { isMobile } = useSidebar();
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -52,54 +43,42 @@ export function NavUser({
         setMounted(true);
     }, []);
 
+    const { data: session } = authClient.useSession();
+
     // Check impersonation status
     useEffect(() => {
-        if (!mounted) return;
+        if (!mounted || !session) return;
 
-        const checkImpersonation = async () => {
-            try {
-                const sessionData = await authClient.getSession();
+        const impersonatedBy =
+            session.session?.impersonatedBy ||
+            (session.session as any)?.impersonatedBy ||
+            (session as any)?.impersonatedBy;
 
-                const impersonatedBy =
-                    sessionData.data?.session?.impersonatedBy ||
-                    (sessionData.data?.session as any)?.impersonatedBy ||
-                    (sessionData.data as any)?.impersonatedBy;
-
-                if (impersonatedBy && sessionData.data?.user) {
-                    setIsImpersonating(true);
-                    setImpersonatedUser({
-                        id: sessionData.data.user.id,
-                        name: sessionData.data.user.name || undefined,
-                        email: sessionData.data.user.email || undefined,
-                        // @ts-expect-error user.nickname and username are valid properties
-                        username: (sessionData.data.user.nickname ?? sessionData.data.user.username) || undefined,
-                    });
-                } else {
-                    setIsImpersonating(false);
-                    setImpersonatedUser(null);
-                }
-            } catch (error) {
-                console.error("Error checking impersonation:", error);
-                setIsImpersonating(false);
-                setImpersonatedUser(null);
-            }
-        };
-
-        checkImpersonation();
-        const interval = setInterval(checkImpersonation, 2000);
-        return () => clearInterval(interval);
-    }, [mounted]);
+        if (impersonatedBy && session.user) {
+            setIsImpersonating(true);
+            setImpersonatedUser({
+                id: session.user.id,
+                name: session.user.name || undefined,
+                email: session.user.email || undefined,
+                // @ts-expect-error user.nickname and username are valid properties
+                username: (session.user.nickname ?? session.user.username) || undefined,
+            });
+        } else {
+            setIsImpersonating(false);
+            setImpersonatedUser(null);
+        }
+    }, [mounted, session]);
 
     const handleStopImpersonation = async () => {
         setIsLoading(true);
         try {
             await authClient.admin.stopImpersonating();
-            toast.success("Stopped impersonating user");
+            toast.success('Stopped impersonating user');
             router.refresh();
             window.location.reload();
         } catch (error) {
-            console.error("Failed to stop impersonation:", error);
-            toast.error(error instanceof Error ? error.message : "Failed to stop impersonation");
+            console.error('Failed to stop impersonation:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to stop impersonation');
         } finally {
             setIsLoading(false);
         }
@@ -118,7 +97,8 @@ export function NavUser({
                         <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-amber-600 dark:text-amber-500 truncate">
-                                Impersonating: {impersonatedUser.username || impersonatedUser.name || impersonatedUser.email}
+                                Impersonating:{' '}
+                                {impersonatedUser.username || impersonatedUser.name || impersonatedUser.email}
                             </p>
                         </div>
                     </div>
@@ -143,49 +123,49 @@ export function NavUser({
 
             <SidebarMenuItem>
                 <DropdownMenu>
-                    <DropdownMenuTrigger render={(props) => (
-                        <SidebarMenuButton
-                            {...props}
-                            size={"lg"}
-                            className={"data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"}
+                    <DropdownMenuTrigger
+                        render={(props) => (
+                            <SidebarMenuButton
+                                {...props}
+                                size={'lg'}
+                                className={
+                                    'data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+                                }
                             >
-                            <Avatar className={"h-8 w-8 rounded-lg"}>
-                                <AvatarImage src={user.avatar} alt={user.username} />
-                                <AvatarFallback className={"rounded-lg"}>CN</AvatarFallback>
-                            </Avatar>
-                            <div className={"grid flex-1 text-left text-sm leading-tight"}>
-                                <span className={"truncate font-medium"}>{user.username}</span>
-                                <span className={"text-muted-foreground truncate text-xs"}>{user.email}</span>
-                            </div>
-                            <EllipsisVertical className={"ml-auto size-4"} />
-                        </SidebarMenuButton>
-                    )} />
+                                <Avatar className={'h-8 w-8 rounded-lg'}>
+                                    <AvatarImage src={user.avatar} alt={user.username} />
+                                    <AvatarFallback className={'rounded-lg'}>CN</AvatarFallback>
+                                </Avatar>
+                                <div className={'grid flex-1 text-left text-sm leading-tight'}>
+                                    <span className={'truncate font-medium'}>{user.username}</span>
+                                    <span className={'text-muted-foreground truncate text-xs'}>{user.email}</span>
+                                </div>
+                                <EllipsisVertical className={'ml-auto size-4'} />
+                            </SidebarMenuButton>
+                        )}
+                    />
                     <DropdownMenuContent
-                        className={"w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"}
-                        side={isMobile ? "bottom" : "right"}
-                        align={"end"}
+                        className={'w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'}
+                        side={isMobile ? 'bottom' : 'right'}
+                        align={'end'}
                         sideOffset={4}
                     >
                         <DropdownMenuGroup>
-                            <DropdownMenuLabel className={"p-0 font-normal"}>
-                                <div className={"flex items-center gap-2 px-1 py-1.5 text-left text-sm"}>
-                                    <Avatar className={"h-8 w-8 rounded-lg"}>
+                            <DropdownMenuLabel className={'p-0 font-normal'}>
+                                <div className={'flex items-center gap-2 px-1 py-1.5 text-left text-sm'}>
+                                    <Avatar className={'h-8 w-8 rounded-lg'}>
                                         <AvatarImage src={user.avatar} alt={user.username} />
-                                        <AvatarFallback className={"rounded-lg"}>CN</AvatarFallback>
+                                        <AvatarFallback className={'rounded-lg'}>CN</AvatarFallback>
                                     </Avatar>
-                                    <div className={"grid flex-1 text-left text-sm leading-tight"}>
-                                        <span className={"truncate font-medium"}>{user.username}</span>
-                                        <span className={"text-muted-foreground truncate text-xs"}>{user.email}</span>
+                                    <div className={'grid flex-1 text-left text-sm leading-tight'}>
+                                        <span className={'truncate font-medium'}>{user.username}</span>
+                                        <span className={'text-muted-foreground truncate text-xs'}>{user.email}</span>
                                     </div>
                                 </div>
                             </DropdownMenuLabel>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
-                            <DropdownMenuItem>
-                                <CircleUser />
-                                Account
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={onSignOut}>
                                 <LogOut />
                                 Logout
@@ -195,5 +175,5 @@ export function NavUser({
                 </DropdownMenu>
             </SidebarMenuItem>
         </SidebarMenu>
-    )
+    );
 }

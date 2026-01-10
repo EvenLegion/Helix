@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@workspace/ui/components/card';
-import { checkPermissions } from '@/server/permissions';
+import { checkPermissionsOrAdmin } from '@/server/permissions';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { getRecruitmentStatistics } from '@/server/recruitment';
@@ -27,7 +27,7 @@ export default async function RecruitmentAdmin() {
         );
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['view'],
     });
 

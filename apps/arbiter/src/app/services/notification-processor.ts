@@ -81,7 +81,7 @@ async function sendDiscordDM(notification: any) {
                 { name: 'Reviewed By', value: payload.reviewerName, inline: true },
                 {
                     name: 'Next Steps',
-                    value: 'You will receive an invite from the organization shortly. Once received please accept it. Welcome aboard!',
+                    value: 'You will receive an invite from the organization shortly via RSI to the email address associated with your RSI account. Once received please accept it. Welcome aboard!',
                     inline: false
                 },
             ])
@@ -111,7 +111,7 @@ async function sendDiscordDM(notification: any) {
     } else {
         throw new Error(`Unknown event type: ${notification.eventType}`);
     }
-
+    // TODO: Org name still not populating
     // Send the DM
     try {
         await user.send({ embeds: [embed] });

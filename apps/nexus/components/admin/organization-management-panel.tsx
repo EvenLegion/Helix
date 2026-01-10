@@ -7,6 +7,7 @@ import { ManageOrganizationDialog } from '@/components/admin/manage-organization
 import { CreateOrganizationDialog } from '@/components/admin/create-organization-dialog';
 import { getOrganizations } from '@/server/organizations';
 import { checkPermissionsOrAdmin } from '@/server/permissions';
+import { JSX } from 'react';
 
 export async function OrganizationManagementPanel(): Promise<JSX.Element> {
     noStore();
@@ -26,7 +27,7 @@ export async function OrganizationManagementPanel(): Promise<JSX.Element> {
             <CardContent>
                 <ActiveOrg
                     organizations={organizations}
-                    key={JSON.stringify(organizations.map(o => ({ id: o.id, isRecruiting: o.isRecruiting })))}
+                    key={JSON.stringify(organizations.map((o) => ({ id: o.id, isRecruiting: o.isRecruiting })))}
                 />
             </CardContent>
             <CardFooter>

@@ -84,7 +84,7 @@ export const auth = betterAuth({
         discord: {
             clientId: process.env.AUTH_DISCORD_ID as string,
             clientSecret: process.env.AUTH_DISCORD_SECRET as string,
-            scope: ["identify", "email", "guilds", "guilds.members.read"],
+            scope: ["identify", "email", "guilds", "guilds.members.read", "guilds.join"],
             prompt: "consent",
             mapProfileToUser: async (profile) => {
                 console.log('Discord profile:', profile);
@@ -175,6 +175,17 @@ async function updateUserData(account: Account) {
     if (account.providerId === 'discord' && account.accessToken) {
         try {
             const guildId = process.env.GUILD_ID;
+
+            // Add user to guild if not already a member
+            if (guildId) {
+                await addUserToGuild({
+                    guildId,
+                    userId: account.accountId,
+                    accessToken: account.accessToken,
+                });
+            }
+
+
             const response = await fetch(`https://discord.com/api/users/@me/guilds/${guildId}/member`, {
                 headers: {
                     'Authorization': `Bearer ${account.accessToken}`,
@@ -201,5 +212,28 @@ async function updateUserData(account: Account) {
         }
     } else {
         console.log('No guild ID or access token found for Discord provider.');
+    }
+}
+
+async function addUserToGuild(params: { guildId: string; userId: string; accessToken: string; }) {
+    const { guildId, userId, accessToken } = params;
+
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) throw new Error('Discord bot token not configured.');
+
+    const response = await fetch(`https://discord.com/api/guilds/${guildId}/members/${userId}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            access_token: accessToken,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to add user to guild: ${errorData.message}`);
     }
 }

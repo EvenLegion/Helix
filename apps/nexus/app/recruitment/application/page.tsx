@@ -9,6 +9,7 @@ export default async function RecruitmentApplication() {
     });
 
     if (!session) {
+        // TODO: Redirect to login and then return
         // If not authenticated, redirect to recruitment page
         redirect('/recruitment');
     }

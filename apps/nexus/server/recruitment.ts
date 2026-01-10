@@ -4,7 +4,7 @@ import { prisma } from '@workspace/db';
 import { getCurrentUser } from './users';
 import { RecruitmentApplicationDAL } from '@/dal/recruitment-application';
 import { logSuccess, logDenied, logError } from './audit';
-import { checkPermissions } from './permissions';
+import { checkPermissionsOrAdmin } from './permissions';
 import { MemberDAL } from '@/dal/members';
 import { DiscordNotificationDAL } from '@/dal/discord-notifications';
 import { OrganizationDAL } from '@/dal/organizations';
@@ -264,7 +264,7 @@ export async function getAllApplications(filters?: { status?: string }) {
         throw new Error('User not authenticated');
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['view']
     });
 
@@ -308,7 +308,7 @@ export async function getRecruitmentStatistics() {
         throw new Error('User not authenticated');
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['view']
     });
 
@@ -368,7 +368,7 @@ export async function acceptApplication(applicationId: string) {
         throw new Error('User not authenticated');
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['accept']
     });
 
@@ -431,12 +431,17 @@ export async function acceptApplication(applicationId: string) {
         }
     }
 
+    const organization = application.organizationId
+        ? await OrganizationDAL.findById(application.organizationId)
+        : null;
+
     // Queue Discord Notificaiton
     await DiscordNotificationDAL.queue({
         eventType: 'application_accepted',
         resourceId: applicationId,
         recipientUserId: application.userId,
         payload: {
+            organizationName: organization?.name || 'the organization',
             rsiHandle: application.rsiHandle,
             reviewerName: currentUser.nickname || currentUser.username || 'A Recruiter',
         },
@@ -473,7 +478,7 @@ export async function rejectApplication(applicationId: string, reason?: string) 
         throw new Error('User not authenticated');
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['reject']
     });
 
@@ -519,12 +524,17 @@ export async function rejectApplication(applicationId: string, reason?: string) 
         currentUser.id
     );
 
+    const organization = application.organizationId
+        ? await OrganizationDAL.findById(application.organizationId)
+        : null;
+
     // Queue Discord Notificaiton
     await DiscordNotificationDAL.queue({
         eventType: 'application_rejected',
         resourceId: applicationId,
         recipientUserId: application.userId,
         payload: {
+            organizationName: organization?.name || 'the organization',
             rsiHandle: application.rsiHandle,
             reviewerName: currentUser.nickname || currentUser.username || 'A Recruiter',
             reason: reason || 'No reason provided',
@@ -566,7 +576,7 @@ export async function deleteApplication(applicationId: string) {
         throw new Error('Not authenticated');
     }
 
-    const hasPermission = await checkPermissions({
+    const hasPermission = await checkPermissionsOrAdmin({
         recruitment: ['delete']
     });
 

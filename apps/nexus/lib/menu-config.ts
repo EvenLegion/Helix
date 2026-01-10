@@ -58,8 +58,8 @@ export const menuItems = {
             // No permissions required, just needs to be in org
         },
         {
-            title: 'Recruitment',
-            url: '/recruitment',
+            title: 'Recruitment Application',
+            url: '/recruitment/application',
             icon: BadgeCheck,
             condition: ({ hasActiveOrg }: MenuItemContext) => !hasActiveOrg,
         },

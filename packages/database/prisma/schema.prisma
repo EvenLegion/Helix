@@ -36,7 +36,8 @@ model User {
     Member                  Member[]
     Invitation              Invitation[]
     auditLogs               AuditLog[]
-    recruitmentApplications RecruitmentApplication[]
+    recruitmentApplications RecruitmentApplication[] @relation("ApplicantUser")
+    reviewedApplications    RecruitmentApplication[] @relation("ReviewerUser")
 
     @@map("user")
     @@schema("nexus")
@@ -243,10 +244,10 @@ model RecruitmentApplication {
     reviewedAt            DateTime?
     reviewedBy            String?
 
-    user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    user         User          @relation("ApplicantUser", fields: [userId], references: [id], onDelete: Cascade)
     organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+    reviewer     User?         @relation("ReviewerUser", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
-    @@unique([userId, status])
     @@index([status, appliedAt])
     @@map("recruitment_application")
     @@schema("nexus")

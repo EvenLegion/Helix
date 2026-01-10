@@ -81,6 +81,14 @@ export class RecruitmentApplicationDAL {
             include: {
                 user: true,
                 organization: true,
+                reviewer: {
+                    select: {
+                        id: true,
+                        nickname: true,
+                        username: true,
+                        name: true,
+                    },
+                },
             },
         });
     }
@@ -109,6 +117,14 @@ export class RecruitmentApplicationDAL {
             include: {
                 user: true,
                 organization: true,
+                reviewer: {
+                    select: {
+                        id: true,
+                        nickname: true,
+                        username: true,
+                        name: true,
+                    },
+                },
             },
         });
     }
@@ -240,6 +256,14 @@ export class RecruitmentApplicationDAL {
                     }
                 },
                 organization: true,
+                reviewer: {
+                    select: {
+                        id: true,
+                        nickname: true,
+                        username: true,
+                        name: true,
+                    },
+                },
             },
             orderBy: { appliedAt: 'desc' },
         });

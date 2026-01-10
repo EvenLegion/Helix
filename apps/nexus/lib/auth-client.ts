@@ -23,6 +23,6 @@ export const authClient = createAuthClient({
         })
     ],
     baseURL: process.env.NODE_ENV === 'production'
-        ? 'http://localhost:3000'
-        : 'http://localhost:3000'
+        ? 'https://40bcf469692c.ngrok-free.app/'
+        : 'https://40bcf469692c.ngrok-free.app/'
 });

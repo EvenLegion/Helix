@@ -17,7 +17,7 @@ import { Textarea } from '@workspace/ui/components/textarea';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { acceptApplication, rejectApplication, deleteApplication } from '@/server/recruitment';
-import { Eye, Check, X, Trash2, Loader2 } from 'lucide-react';
+import { View, Check, X, Trash2, Loader2 } from 'lucide-react';
 
 interface ApplicationReviewDialogProps {
     application: any;
@@ -83,9 +83,9 @@ export function ApplicationReviewDialog({ application, permissions }: Applicatio
     return (
         <Dialog open={open} onOpenChange={setOpen} modal={true}>
             <DialogTrigger render={<Button variant="ghost" size="sm" />}>
-                <Eye className="h-4 w-4" />
+                <View className="h-4 w-4" />
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>Application Review - {application.rsiHandle}</DialogTitle>
                     <DialogDescription>
@@ -177,7 +177,13 @@ export function ApplicationReviewDialog({ application, permissions }: Applicatio
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium">Reviewed By</p>
-                                    <p className="text-sm text-muted-foreground">{application.reviewedBy || '-'}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {application.reviewer
+                                            ? application.reviewer.nickname ||
+                                              application.reviewer.username ||
+                                              'Unknown'
+                                            : '-'}
+                                    </p>
                                 </div>
                             </div>
                         </>
