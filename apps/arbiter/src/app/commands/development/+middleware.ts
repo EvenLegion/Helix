@@ -1,53 +1,23 @@
-import { MiddlewareContext, stopMiddlewares } from "commandkit";
-import { MessageFlags, PermissionsBitField } from "discord.js";
-import { CONFIG, isDev } from "../../config";
-import { forInteraction } from "@workspace/logger";
+import {MiddlewareContext, stopMiddlewares} from "commandkit";
+import { MessageFlags } from "discord.js";
 
 export async function beforeExecute(ctx: MiddlewareContext) {
-    const { interaction } = ctx;
 
-    // Bypass in development or when explicitly enabled
-    const isDevEnv = isDev();
-    const bypass = CONFIG.DEV_BYPASS;
+    //This middleware runs before all of the development commands
+    // @ts-ignore'
+    // Filter out users who do not have the Server Staff Role
+    if (!ctx.interaction.member.roles.cache.has('1364287451576930326')) {
 
-    if (isDevEnv || bypass) {
-        return; // allow execution during local dev
-    }
+        const {interaction} = ctx;
 
-    // If not in a guild, nothing to check
-    if (!interaction.inGuild()) return;
-
-    // Allow users with Administrator permission
-    if (
-        interaction.memberPermissions?.has(
-            PermissionsBitField.Flags.Administrator
-        )
-    ) {
-        return;
-    }
-
-    // Otherwise require the Server Staff Role
-    const STAFF_ROLE_ID = CONFIG.STAFF_ROLE_ID;
-    let guildMember = interaction.guild?.members.cache.get(interaction.user.id) as any;
-    if (!guildMember && interaction.guild) {
-        try {
-            guildMember = await interaction.guild.members.fetch(interaction.user.id);
-        } catch {
-            guildMember = null;
+        if (interaction.isRepliable()) {
+            await interaction.reply ({
+                content: 'This command is only available to the server admins.',
+                flags: MessageFlags.Ephemeral,
+            })
         }
+
+        console.log(`${ctx.commandName} will not be executed!`);
+        stopMiddlewares()
     }
-
-    const hasStaffRole = (guildMember as any)?.roles?.cache?.has?.(STAFF_ROLE_ID);
-    if (hasStaffRole) return;
-
-    if (interaction.isRepliable()) {
-        await interaction.reply({
-            content: "This command is only available to the server admins.",
-            flags: MessageFlags.Ephemeral,
-        });
-    }
-
-    const log = forInteraction(interaction).child({ mod: 'middleware', command: ctx.commandName });
-    log.warn('Command will not be executed due to insufficient permissions');
-    stopMiddlewares();
 }

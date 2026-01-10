@@ -76,3 +76,8 @@ DiscordRoles.xlsx
 CLAUDE.md
 apps/nexus/.claude/settings.local.json
 AGENTS.md
+.github/copilot-instructions.md
+/apps/nexus/.claude/settings.local.json
+/apps/nexus/nul
+/.claude/
+.claude/settings.local.json
