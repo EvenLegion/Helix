@@ -14,7 +14,7 @@
       "cache": false
     },
     "@workspace/db#build": {
-      "dependsOn": ["^db:generate"],
+      "dependsOn": ["db:generate"],
       "outputs": ["dist/**"]
     },
     "build": {
