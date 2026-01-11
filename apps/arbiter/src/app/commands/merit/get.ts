@@ -51,7 +51,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     // Fetch most recent merit entry for event description
     const last = await prisma.merit.findFirst({
       where: { userID: targetId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { created_at: "desc" },
       select: { description: true },
     });
     const lastEvent = (last?.description || "None").trim();
@@ -63,20 +63,20 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
       return interaction.reply({ content: `${line1}\n${line2}`, flags: MessageFlags.Ephemeral });
     }
 
-    // Include full merit history as CSV, sorted by newest first (id desc)
+    // Include full merit history as CSV, sorted by newest first (created_at desc)
     const entries = await prisma.merit.findMany({
       where: { userID: targetId },
-      orderBy: { id: "desc" },
+      orderBy: { created_at: "desc" },
       select: {
         merits: true,
         description: true,
-        additionalNotes: true,
-        awardedBy: true,
+        additional_notes: true,
+        awarded_by: true,
       },
     });
 
     // Resolve awarder names: DB first, then guild members, then global user fetch
-    const awarderIds = Array.from(new Set(entries.map(e => e.awardedBy).filter((v): v is string => !!v)));
+    const awarderIds = Array.from(new Set(entries.map(e => e.awarded_by).filter((v): v is string => !!v)));
     const awarderNameMap = await resolveUserNameMap({
       client: interaction.client,
       guild: interaction.guild ?? undefined,
@@ -92,7 +92,7 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
     const csvRows = entries.map(e => [
       esc(e.merits ?? 0),
       esc(e.description ?? ""),
-      esc(e.awardedBy ? awarderNameMap.get(e.awardedBy) ?? e.awardedBy : e.awardedBy),
+      esc(e.awarded_by ? awarderNameMap.get(e.awarded_by) ?? e.awarded_by : e.awarded_by),
     ].join(","));
     const csvContent = [csvHeader, ...csvRows].join(os.EOL);
 

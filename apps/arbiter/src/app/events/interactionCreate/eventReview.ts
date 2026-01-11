@@ -247,8 +247,8 @@ export default async function (interaction: Interaction, client: Client) {
       // Filter out users already awarded for this session/type
       const existing = await tx.merit.findMany({
         where: {
-          typeId: meritType!.id,
-          additionalNotes: notes,
+          type_id: meritType!.id,
+          additional_notes: notes,
           userID: { in: present.map(p => p.userId) },
         },
         select: { userID: true },
@@ -263,9 +263,9 @@ export default async function (interaction: Interaction, client: Client) {
               userID: p.userId,
               merits: meritType!.value,
               description: awardDescription || meritType!.description,
-              additionalNotes: notes,
-              awardedBy: reviewerId,
-              typeId: meritType!.id,
+              additional_notes: notes,
+              awarded_by: reviewerId,
+              type_id: meritType!.id,
             })),
             skipDuplicates: true,
           });
@@ -278,9 +278,9 @@ export default async function (interaction: Interaction, client: Client) {
                   userID: sel.userId,
                   merits: meritType!.value,
                   description: awardDescription || meritType!.description,
-                  additionalNotes: notes,
-                  awardedBy: reviewerId,
-                  typeId: meritType!.id,
+                  additional_notes: notes,
+                  awarded_by: reviewerId,
+                  type_id: meritType!.id,
                 },
               });
             } catch {}

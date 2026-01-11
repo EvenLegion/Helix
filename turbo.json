@@ -13,6 +13,10 @@
     "db:deploy": {
       "cache": false
     },
+    "@workspace/db#build": {
+      "dependsOn": ["^db:generate"],
+      "outputs": ["dist/**"]
+    },
     "build": {
       "dependsOn": ["^build", "^db:generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
