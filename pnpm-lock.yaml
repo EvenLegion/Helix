@@ -155,7 +155,7 @@ importers:
   packages/database:
     dependencies:
       '@prisma/client':
-        specifier: ^6.16.2
+        specifier: ^6.19.0
         version: 6.19.0(prisma@6.19.0(typescript@5.9.3))(typescript@5.9.3)
       '@prisma/extension-accelerate':
         specifier: ^2.0.2
@@ -165,7 +165,7 @@ importers:
         specifier: ^22.15.3
         version: 22.19.2
       prisma:
-        specifier: ^6.16.2
+        specifier: ^6.19.0
         version: 6.19.0(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
