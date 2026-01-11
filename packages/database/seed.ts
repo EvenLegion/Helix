@@ -4,7 +4,7 @@ const prisma = new PrismaClient()
 
 async function main() {
     const eliteOp = await prisma.meritType.upsert({
-        where: { id: '1' },
+        where: { id: 1 },
         update: {},
         create: {
             id: 1,
@@ -14,7 +14,7 @@ async function main() {
         },
     })
     const interCasOp = await prisma.meritType.upsert({
-        where: { id: '2' },
+        where: { id: 2 },
         update: {},
         create: {
             id: 2,
