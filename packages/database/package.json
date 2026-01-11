@@ -39,7 +39,7 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
-  }
+  },
     "name": "@workspace/db",
     "version": "1.0.0",
     "type": "module",

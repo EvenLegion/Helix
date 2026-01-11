@@ -111,7 +111,6 @@ async function sendDiscordDM(notification: any) {
     } else {
         throw new Error(`Unknown event type: ${notification.eventType}`);
     }
-    // TODO: Org name still not populating
     // Send the DM
     try {
         await user.send({ embeds: [embed] });

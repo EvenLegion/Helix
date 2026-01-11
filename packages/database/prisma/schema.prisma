@@ -118,7 +118,7 @@ model Merit {
     userID          String    @id
     merits          Int
     description     String    @db.VarChar(255)
-    additonal_notes String    @db.VarChar(255)
+  additional_notes String    @db.VarChar(255)
     awarded_by      String
     created_at      DateTime  @default(now())
     updated_at      DateTime  @updatedAt
@@ -129,7 +129,7 @@ model Merit {
   @@index([userID])
   /// Ensure per-session, per-type, per-user event awards are unique when using
   /// additionalNotes formatted as: "Awarded via event session <sessionId>"
-  @@unique([userID, typeId, additionalNotes])
+  @@unique([userID, type_id, additional_notes])
   @@map("merit")
   @@schema("arbiter")
 }
