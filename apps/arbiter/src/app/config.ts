@@ -26,9 +26,7 @@ export const DIVISION_ROLES = isDev() ? {
   combat: {
     HLO: process.env.DEV_HALO_ROLE_ID ?? "", // H.A.L.O. (dev)
     VNG: process.env.DEV_VANGUARD_ROLE_ID ?? "", // V.A.N.G.U.A.R.D. (dev)
-    SPR: process.env.DEV_SPEAR_ROLE_ID ?? "", // S.P.E.A.R. (dev)
     HVK: process.env.DEV_HAVOK_ROLE_ID ?? "", // H.A.V.O.K. (dev)
-    RFT: process.env.DEV_RAFT_ROLE_ID ?? "", // R.A.F.T. (dev)
   },
   industrial: {
     DRL: process.env.DEV_DRILL_ROLE_ID ?? "", // D.R.I.L.L. (dev)
@@ -42,9 +40,7 @@ export const DIVISION_ROLES = isDev() ? {
   combat: {
     HLO: "1356438908212088863", // H.A.L.O.
     VNG: "1356438093988757686", // V.A.N.G.U.A.R.D.
-    SPR: "1356438285592825989", // S.P.E.A.R.
     HVK: "1362489356958437477", // H.A.V.O.K.
-    RFT: "1356438213438472323", // R.A.F.T.
   },
   industrial: {
     DRL: "1356458993056485477", // D.R.I.L.L.

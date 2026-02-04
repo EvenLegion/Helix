@@ -20,9 +20,7 @@ const divisions = [
     "VANG_Emblem",
     "1370272690623217664",
   ],
-  ["SPR", "S.P.E.A.R.", "combat", true, "SPR | ", "SPR_Emblem", "1370272692267389018"],
   ["HVK", "H.A.V.O.K.", "combat", true, "HVK | ", "HVK_Emblem", "1370272695308259398"],
-  ["RFT", "R.A.F.T.", "combat", true, "RFT | ", "RAFT_Emblem", "1374196910151176273"],
   ["RPR", "R.E.A.P.E.R.", "combat", true, "RPR | ", null, null],
   [
     "DRL",
