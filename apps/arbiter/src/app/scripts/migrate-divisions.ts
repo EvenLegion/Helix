@@ -193,12 +193,24 @@ async function updateDiscordAndNicknames(
 			if (!dryRun) {
 				// Remove legacy role, add target role, then sync nickname
 				if (hasFrom) {
-					await member.roles.remove(fromRoleId);
+					try {
+						await member.roles.remove(fromRoleId);
+					} catch (err) {
+						console.warn(`[roles] failed to remove ${from} from ${userId}: ${String((err as any)?.message ?? err)}`);
+					}
 				}
 				if (!hasTo) {
-					await member.roles.add(toRoleId);
+					try {
+						await member.roles.add(toRoleId);
+					} catch (err) {
+						console.warn(`[roles] failed to add ${to} to ${userId}: ${String((err as any)?.message ?? err)}`);
+					}
 				}
-				await syncNicknameAuto({ guild, userID: userId });
+				try {
+					await syncNicknameAuto({ guild, userID: userId });
+				} catch (err) {
+					console.warn(`[nickname] failed for ${userId}: ${String((err as any)?.message ?? err)}`);
+				}
 			}
 
 			syncCount++;
@@ -263,11 +275,10 @@ async function main() {
 
 			await client.login(DISCORD_TOKEN);
 			await updateDiscordAndNicknames(client, GUILD_ID, affectedUsers);
+			await deleteLegacyDivisions();
 		} else {
 			console.log("Discord env not set; skipping role updates and nickname sync.");
 		}
-
-		await deleteLegacyDivisions();
 	} finally {
 		if (client) {
 			await client.destroy();
