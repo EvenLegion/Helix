@@ -111,9 +111,9 @@ Both `/rank sync` and `/rank sync-all` now show a review screen before any chang
 - After Apply/Cancel, the UI is cleared to avoid stale interactions.
 
 ## Parsing legacy nicknames (backfill)
-When users already have decorated nicknames (e.g., `RFT | Sigeth ①`, `HVK ◇ | quin ①`), the sync logic:
+When users already have decorated nicknames (e.g., `VNG | Sigeth ①`, `HVK ◇ | quin ①`), the sync logic:
 
-- Strips known rank symbols (◇, ⬖, ◆ and circled digits) and detects a division by matching either the configured `nicknamePrefix` (e.g., `RFT |`) or the division `code` at the start.
+- Strips known rank symbols (◇, ⬖, ◆ and circled digits) and detects a division by matching either the configured `nicknamePrefix` (e.g., `VNG |`) or the division `code` at the start.
 - Extracts a clean base name (e.g., `Sigeth`) and uses it to backfill `preferredName` if it’s missing.
 - If a division (combat or staff) is detected and the user lacks DivisionMembership, a membership is backfilled for that division.
 - Hidden divisions are respected: if the selected division has `showRank = false` and is `kind = 'staff'`, we still perform a prefix-only update; otherwise, no nickname change is applied.

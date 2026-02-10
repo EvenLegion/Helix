@@ -11,7 +11,8 @@ import {
 } from "discord.js";
 import { forInteraction } from "@workspace/logger";
 import { Division, prisma } from "@workspace/db";
-import { CONFIG } from "../../config";
+
+import { CONFIG, DIVISION_ROLES } from "../../config";
 
 type DivisionWithEmoji = Division & { emojiId: string; emojiName: string };
 
@@ -20,10 +21,6 @@ const COMBAT_DESCRIPTIONS: Record<string, string[]> = {
 		"**High-Altitude Lethal Overwatch** - H.A.L.O. is Even Legion's elite fighter squadron. These pilots dominate the skies through fierce engagement and superior air control, ensuring aerial superiority in every conflict.",
 		"\nIn this Division, you might: fly high-speed fighters/interceptors, engage enemy squadrons, or serve as air cover in coordinated ops.",
 	],
-	SPR: [
-		"**Specialized Extraction and Reconnaissance** - S.P.E.A.R. is the Legion's eyes in the dark. Masters of infiltration, tracking, and elimination, they strike with precision - or observe silently until the time is right.",
-		"\nIn this Division, you might: scan for threats, perform intel runs, execute black ops, or sabotage key assets.",
-	],
 	VNG: [
 		"**Vehicle & Ground Unity Armed Deployment** - V.A.N.G.U.A.R.D. is the Legion's ground combat core. Vanguard leads bunker breaches, vehicle assaults, and frontline raids. Whether it's boots in the dirt or tanks on the move, they're our hammer on the ground.",
 		"\nIn this Division, you might: clear bunkers, operate tanks or transports, hold fortified positions, and assault, clear, and hold key locations.",
@@ -31,10 +28,6 @@ const COMBAT_DESCRIPTIONS: Record<string, string[]> = {
 	HVK: [
 		"**Heavy Air Support & Variable Ordnance** - H.A.V.O.K. is our multi-crew gunship and heavy-class strike unit. Operating between air and ground, they bring firepower and flexibility to escort, overwatch, and support combat teams in hostile zones.",
 		"\nIn this Division, you might: crew a gunship, escort dropships, take out enemy capital ships, or support divisions on the ground and in the air.",
-	],
-	RFT: [
-		"**Rapid Aid & Field Triage** - R.A.F.T. is the Legion's fearless medical rescue unit. From reviving wounded soldiers to coordinating medical extractions, these responders keep the fight alive.",
-		"\nIn this Division, you might: work as combat medics, deploy with search and rescue teams, or stabilize critical players in high-pressure engagements.",
 	],
 };
 
@@ -134,9 +127,15 @@ export async function chatInput({ interaction }: ChatInputCommandContext) {
 async function fetchDivisionsWithEmojis(
 	divisionType: "combat" | "industrial"
 ): Promise<DivisionWithEmoji[]> {
+	const allowedCodes =
+		divisionType === "combat"
+			? Object.keys(DIVISION_ROLES.combat)
+			: Object.keys(DIVISION_ROLES.industrial);
+
 	return (await prisma.division.findMany({
 		where: {
 			kind: { equals: divisionType, mode: "insensitive" },
+			code: { in: allowedCodes },
 			AND: [{ emojiId: { not: null } }, { emojiName: { not: null } }],
 		},
 		orderBy: { id: "asc" },
