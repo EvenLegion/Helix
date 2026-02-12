@@ -143,6 +143,10 @@ async function pickDisplayDivision(userID: string) {
 	const memberships = await prisma.divisionMembership.findMany({ where: { userId: userID }, include: { division: true } });
 	log.debug({ memberships: memberships.map(m => ({ code: m.division.code, kind: m.division.kind, showRank: m.division.showRank })) }, "pickDisplayDivision");
 
+	// If user has a Lance division membership (code ending in -L), prefer it.
+	const lance = memberships.find(m => String(m.division.code).toUpperCase().endsWith("-L"));
+	if (lance) return lance.division;
+
 	// Priority: combat > industrial > null
 	// Prefer combat with visible rank (highest priority)
 	const combat = memberships.find(m => String(m.division.kind).toLowerCase() === "combat" && m.division.showRank);
